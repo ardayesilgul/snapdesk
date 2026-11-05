@@ -10,6 +10,8 @@ Windows için ekran görüntüsü alma, çizim ve düzenleme, ekrana sabitleme (
 
 SnapDesk tamamen çevrimdışı çalışır; telemetri, hesap zorunluluğu veya arka planda ağ bağlantısı içermez. .NET 10 ve C# ile Windows masaüstü ortamı için geliştirilmiştir.
 
+![SnapDesk Arayüzü](assets/showcase.jpg)
+
 ## Özellikler
 
 - **Ekran Yakalama:** Özel bölge, etkin pencere algılama veya tüm ekran (`Ctrl+A`). RGB hex renk ve koordinat göstergeli 9x piksel büyüteci, anlık piksel boyut etiketi ve hassas ayar tutamaçları.

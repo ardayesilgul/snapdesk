@@ -10,6 +10,8 @@ A lightweight Windows utility for screen capture, annotation, floating pins, and
 
 SnapDesk runs entirely offline with zero telemetry, accounts, or background network requests. Built with .NET 10 and C# for Windows.
 
+![SnapDesk Interface](assets/showcase.jpg)
+
 ## Features
 
 - **Screen Capture:** Capture custom regions, active windows, or full displays (`Ctrl+A`). Includes a 9x pixel magnifier with RGB hex readout, dynamic size dimensions, and fine-tuning handles.
