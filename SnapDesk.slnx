@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/SnapDesk/SnapDesk.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/SnapDesk.Tests/SnapDesk.Tests.csproj" />
+  </Folder>
+</Solution>

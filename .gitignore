@@ -1,0 +1,28 @@
+## Build & Compiled outputs
+bin/
+obj/
+dist/
+publish/
+*.pdb
+[Bb]uild[Ll]og.*
+
+## Visual Studio, Rider & IDE
+.vs/
+.vscode/
+.idea/
+*.user
+*.userosscache
+*.suo
+*.userprefs
+*.sln.docstates
+
+## OS & Logs
+*.log
+Thumbs.db
+[Dd]esktop.ini
+.DS_Store
+
+## Local reference dumps & large analysis artifacts
+reference/
+tools/*/bin/
+tools/*/obj/
