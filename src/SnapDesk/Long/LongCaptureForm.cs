@@ -60,7 +60,7 @@ public sealed class LongCaptureForm : Form
         BackColor = Theme.ToolbarBack;
 
         var screen = Screen.FromRectangle(region).WorkingArea;
-        var x = Math.Clamp(region.Left, 8, Math.Max(8, screen.Right - Width - 8));
+        var x = Math.Clamp(region.Left, screen.Left + 8, Math.Max(screen.Left + 8, screen.Right - Width - 8));
         var y = region.Bottom + 10;
         if (y + Height > screen.Bottom - 8)
         {
@@ -429,6 +429,11 @@ public sealed class LongResultForm : Form
             if ((ModifierKeys & Keys.Control) == 0)
             {
                 return; // Ctrl yoksa normal dikey kaydırma
+            }
+
+            if (e is HandledMouseEventArgs hme)
+            {
+                hme.Handled = true;
             }
 
             Zoom(e.Delta > 0 ? 1.1f : 1 / 1.1f);

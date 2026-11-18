@@ -73,7 +73,7 @@ public sealed class RecordBarForm : Form
         BackColor = Theme.ToolbarBack;
 
         var screen = Screen.FromRectangle(region).WorkingArea;
-        var x = Math.Clamp(region.Left, 8, Math.Max(8, screen.Right - Width - 8));
+        var x = Math.Clamp(region.Left, screen.Left + 8, Math.Max(screen.Left + 8, screen.Right - Width - 8));
         var y = region.Bottom + 10;
         if (y + Height > screen.Bottom - 8)
         {

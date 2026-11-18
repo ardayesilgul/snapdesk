@@ -437,8 +437,10 @@ public sealed class TextAnnotation : Annotation
         }
 
         using var brush = new SolidBrush(Color);
+        var prevHint = g.TextRenderingHint;
         g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
         g.DrawString(Text, font, brush, location, StringFormat.GenericTypographic);
+        g.TextRenderingHint = prevHint;
     }
 
     public override RectangleF GetBounds()
@@ -554,9 +556,13 @@ public sealed class MosaicAnnotation : Annotation
 
         if (Patch is not null)
         {
+            var prevInterpolation = g.InterpolationMode;
+            var prevOffset = g.PixelOffsetMode;
             g.InterpolationMode = IsBlur ? InterpolationMode.HighQualityBicubic : InterpolationMode.NearestNeighbor;
             g.PixelOffsetMode = PixelOffsetMode.Half;
             g.DrawImage(Patch, destination);
+            g.InterpolationMode = prevInterpolation;
+            g.PixelOffsetMode = prevOffset;
 
             // Hafif estetik sınır çizgisi: kullanıcının nereye mozaik/bulanıklık uyguladığını net görmesini sağlar
             using var borderPen = new Pen(Color.FromArgb(70, 255, 255, 255), 1f) { DashStyle = DashStyle.Dash };

@@ -125,6 +125,11 @@ public static class WindowEnumerator
                 return true;
             }
 
+            if (info.ClassName is "Progman" or "WorkerW" or "Shell_TrayWnd" or "Shell_SecondaryTrayWnd")
+            {
+                return true;
+            }
+
             if (IsCloaked(handle))
             {
                 return true;

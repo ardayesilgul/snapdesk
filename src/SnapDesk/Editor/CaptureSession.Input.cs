@@ -1295,6 +1295,7 @@ public sealed partial class CaptureSession
         var dx = key == Keys.Left ? -step : key == Keys.Right ? step : 0;
         var dy = key == Keys.Up ? -step : key == Keys.Down ? step : 0;
 
+        PushUndo();
         Selection = ClampToVirtual(new Rectangle(Selection.X + dx, Selection.Y + dy, Selection.Width, Selection.Height));
         PositionToolbar();
         InvalidateAll();
@@ -1441,10 +1442,16 @@ public sealed partial class CaptureSession
         menu.Items.Add(MenuItem("Kaydet (Ctrl+S)", Save));
         menu.Items.Add(MenuItem("Ekrana sabitle (Ctrl+T)", Pin));
         menu.Items.Add(MenuItem("Metni tanı (Shift+C)", RunOcr));
-        menu.Items.Add(MenuItem("Uzun yakalama (Ctrl+L)", StartLongCapture));
-        menu.Items.Add(MenuItem("Video kaydet (Ctrl+G)", StartRecording));
+        var longItem = MenuItem("Uzun yakalama (Ctrl+L)", StartLongCapture);
+        longItem.Enabled = HasSelection;
+        menu.Items.Add(longItem);
+        var recordItem = MenuItem("Video kaydet (Ctrl+G)", StartRecording);
+        recordItem.Enabled = HasSelection;
+        menu.Items.Add(recordItem);
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add(MenuItem("Tüm çizimleri temizle (Ctrl+Shift+Z)", ClearAnnotations));
+        var clearItem = MenuItem("Tüm çizimleri temizle (Ctrl+Shift+Z)", ClearAnnotations);
+        clearItem.Enabled = Annotations.Count > 0;
+        menu.Items.Add(clearItem);
         menu.Items.Add(MenuItem("İptal (Esc)", RequestCancel));
 
         menu.Closed += (_, _) => UiFactory.DisposeLater(menu);

@@ -77,7 +77,9 @@ public sealed class PinForm : Form
 
         using var path = Theme.RoundedRect(
             new RectangleF(Glow, Glow, _image.Width * _zoom, _image.Height * _zoom), 8);
+        var oldRegion = Region;
         Region = new Region(path);
+        oldRegion?.Dispose();
 
         FormClosed += (_, _) =>
         {

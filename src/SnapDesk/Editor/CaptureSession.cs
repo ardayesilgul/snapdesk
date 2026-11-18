@@ -381,16 +381,13 @@ public sealed partial class CaptureSession : IDisposable
                 ? System.Drawing.Imaging.ImageFormat.Jpeg
                 : System.Drawing.Imaging.ImageFormat.Png;
 
-            image.Save(dialog.FileName, format);
+            var folder = Path.GetDirectoryName(dialog.FileName);
+            if (!string.IsNullOrEmpty(folder))
+            {
+                Directory.CreateDirectory(folder);
+            }
 
-            try
-            {
-                Directory.CreateDirectory(Path.GetDirectoryName(dialog.FileName) ?? _settings.SaveFolder);
-            }
-            catch
-            {
-                // klasör zaten var
-            }
+            image.Save(dialog.FileName, format);
 
             CompletedWithAction = true;
             CloseSession();
@@ -620,7 +617,7 @@ public sealed partial class CaptureSession : IDisposable
 
     // ------------------------------------------------------------- geri / ileri
 
-    private void PushUndo()
+    internal void PushUndo()
     {
         _history.Push(CaptureSnapshot());
         _toolbar?.OnSessionChanged();

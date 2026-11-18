@@ -45,7 +45,7 @@ public sealed class Recorder : IDisposable
                     continue;
                 }
 
-                var process = Process.Start(new ProcessStartInfo("where.exe", candidate)
+                using var process = Process.Start(new ProcessStartInfo("where.exe", candidate)
                 {
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
@@ -149,12 +149,18 @@ public sealed class Recorder : IDisposable
             _process = process;
 
             // Hata çıktısını biriktir; erken kapanırsa mesaj gösterebilelim.
-            _errorBuffer = string.Empty;
+            lock (_errorLock)
+            {
+                _errorBuffer = string.Empty;
+            }
             process.ErrorDataReceived += (_, e) =>
             {
                 if (!string.IsNullOrEmpty(e.Data))
                 {
-                    _errorBuffer += e.Data + Environment.NewLine;
+                    lock (_errorLock)
+                    {
+                        _errorBuffer += e.Data + Environment.NewLine;
+                    }
                 }
             };
             process.BeginErrorReadLine();
@@ -169,6 +175,7 @@ public sealed class Recorder : IDisposable
         }
     }
 
+    private readonly object _errorLock = new();
     private string _errorBuffer = string.Empty;
 
     public void Pause()
@@ -190,9 +197,13 @@ public sealed class Recorder : IDisposable
             return;
         }
 
+        if (!StartSegment())
+        {
+            return;
+        }
+
         _paused = false;
         _watch.Start();
-        StartSegment();
     }
 
     /// <summary>Kaydı bitirir, segmentleri birleştirir ve son dosya yolunu döndürür.</summary>
@@ -216,9 +227,15 @@ public sealed class Recorder : IDisposable
             return null;
         }
 
-        if (!string.IsNullOrWhiteSpace(_errorBuffer) && _segments.All(s => !File.Exists(s) || new FileInfo(s).Length == 0))
+        string errorSnapshot;
+        lock (_errorLock)
         {
-            LastError = "Kayıt başarısız:\n" + _errorBuffer.Trim();
+            errorSnapshot = _errorBuffer;
+        }
+
+        if (!string.IsNullOrWhiteSpace(errorSnapshot) && _segments.All(s => !File.Exists(s) || new FileInfo(s).Length == 0))
+        {
+            LastError = "Kayıt başarısız:\n" + errorSnapshot.Trim();
             return null;
         }
 
@@ -287,7 +304,7 @@ public sealed class Recorder : IDisposable
 
         try
         {
-            var process = Process.Start(new ProcessStartInfo(ffmpeg, arguments)
+            using var process = Process.Start(new ProcessStartInfo(ffmpeg, arguments)
             {
                 UseShellExecute = false,
                 CreateNoWindow = true,
@@ -333,7 +350,7 @@ public sealed class Recorder : IDisposable
 
         try
         {
-            var process = Process.Start(new ProcessStartInfo(ffmpeg, arguments)
+            using var process = Process.Start(new ProcessStartInfo(ffmpeg, arguments)
             {
                 UseShellExecute = false,
                 CreateNoWindow = true,

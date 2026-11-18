@@ -34,28 +34,35 @@ public static class ScreenCapture
         }
 
         var bitmap = new Bitmap(region.Width, region.Height, PixelFormat.Format32bppArgb);
-
-        using var graphics = Graphics.FromImage(bitmap);
-        var destination = graphics.GetHdc();
-        var source = GetDC(IntPtr.Zero);
-
         try
         {
-            // CAPTUREBLT katmanlı pencereleri (araç ipuçları, gölgeler) de dahil eder.
-            if (!BitBlt(destination, 0, 0, region.Width, region.Height, source,
-                        region.Left, region.Top, SRCCOPY | CAPTUREBLT))
-            {
-                var error = Marshal.GetLastWin32Error();
-                throw new InvalidOperationException($"Ekran yakalanamadı (BitBlt hatası {error}).");
-            }
-        }
-        finally
-        {
-            ReleaseDC(IntPtr.Zero, source);
-            graphics.ReleaseHdc(destination);
-        }
+            using var graphics = Graphics.FromImage(bitmap);
+            var destination = graphics.GetHdc();
+            var source = GetDC(IntPtr.Zero);
 
-        return bitmap;
+            try
+            {
+                // CAPTUREBLT katmanlı pencereleri (araç ipuçları, gölgeler) de dahil eder.
+                if (!BitBlt(destination, 0, 0, region.Width, region.Height, source,
+                            region.Left, region.Top, SRCCOPY | CAPTUREBLT))
+                {
+                    var error = Marshal.GetLastWin32Error();
+                    throw new InvalidOperationException($"Ekran yakalanamadı (BitBlt hatası {error}).");
+                }
+            }
+            finally
+            {
+                ReleaseDC(IntPtr.Zero, source);
+                graphics.ReleaseHdc(destination);
+            }
+
+            return bitmap;
+        }
+        catch
+        {
+            bitmap.Dispose();
+            throw;
+        }
     }
 
     /// <summary>
@@ -87,20 +94,24 @@ public static class ScreenCapture
         }
 
         var bitmap = new Bitmap(width, height, PixelFormat.Format32bppArgb);
+        var printed = false;
         using (var graphics = Graphics.FromImage(bitmap))
         {
             var hdc = graphics.GetHdc();
             try
             {
-                if (!PrintWindow(handle, hdc, PW_RENDERFULLCONTENT))
-                {
-                    return CaptureRegion(Rectangle.FromLTRB(rect.Left, rect.Top, rect.Right, rect.Bottom));
-                }
+                printed = PrintWindow(handle, hdc, PW_RENDERFULLCONTENT);
             }
             finally
             {
                 graphics.ReleaseHdc(hdc);
             }
+        }
+
+        if (!printed)
+        {
+            bitmap.Dispose();
+            return CaptureRegion(Rectangle.FromLTRB(rect.Left, rect.Top, rect.Right, rect.Bottom));
         }
 
         // PrintWindow bazı uygulamalarda tamamen siyah döner; bu durumda ekran kopyası daha doğrudur.

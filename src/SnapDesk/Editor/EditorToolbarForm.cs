@@ -165,7 +165,9 @@ public sealed class EditorToolbarForm : Form
         if (Width <= 0 || Height <= 0) return;
         var cornerRadius = S(18);
         using var path = Theme.RoundedRect(new RectangleF(0, 0, Width, Height), cornerRadius);
+        var oldRegion = Region;
         Region = new Region(path);
+        oldRegion?.Dispose();
     }
 
     protected override void OnResize(EventArgs e)
@@ -602,8 +604,8 @@ public sealed class EditorToolbarForm : Form
     private int AddToggle(int x, int y, int height, string id, string text, bool active, bool bold = false, bool italic = false)
     {
         using var graphics = CreateGraphics();
-        var width = Math.Max(S(28), TextRenderer.MeasureText(graphics, text,
-            new Font("Segoe UI", 9f, (bold ? FontStyle.Bold : FontStyle.Regular) | (italic ? FontStyle.Italic : FontStyle.Regular))).Width + S(14));
+        using var measureFont = new Font("Segoe UI", 9f, (bold ? FontStyle.Bold : FontStyle.Regular) | (italic ? FontStyle.Italic : FontStyle.Regular));
+        var width = Math.Max(S(28), TextRenderer.MeasureText(graphics, text, measureFont).Width + S(14));
 
         _hits.Add(new Hit
         {
@@ -1044,9 +1046,11 @@ public sealed class EditorToolbarForm : Form
 
         if (_draggingForm)
         {
+            var vs = SystemInformation.VirtualScreen;
+            var screenPt = PointToScreen(e.Location);
             Location = new Point(
-                Math.Max(0, PointToScreen(e.Location).X - _dragOffset.X),
-                Math.Max(0, PointToScreen(e.Location).Y - _dragOffset.Y));
+                Math.Clamp(screenPt.X - _dragOffset.X, vs.Left, Math.Max(vs.Left, vs.Right - Width)),
+                Math.Clamp(screenPt.Y - _dragOffset.Y, vs.Top, Math.Max(vs.Top, vs.Bottom - Height)));
             _userPositioned = true;
             return;
         }
@@ -1120,6 +1124,11 @@ public sealed class EditorToolbarForm : Form
 
         if (hit.Id == "opt:widthSlider")
         {
+            if (_session.SelectedAnnotation is not null)
+            {
+                _session.PushUndo();
+            }
+
             _sliderId = hit.Id;
             SetSliderValue(hit.Id, e.X);
             Capture = true;
