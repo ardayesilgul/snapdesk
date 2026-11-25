@@ -104,6 +104,19 @@ public static class UiFactory
     {
         try
         {
+            using var stream = typeof(UiFactory).Assembly.GetManifestResourceStream("SnapDesk.app.ico");
+            if (stream is not null)
+            {
+                return new Icon(stream);
+            }
+        }
+        catch
+        {
+            // yoksay
+        }
+
+        try
+        {
             var exePath = Environment.ProcessPath;
             if (!string.IsNullOrEmpty(exePath) && File.Exists(exePath))
             {

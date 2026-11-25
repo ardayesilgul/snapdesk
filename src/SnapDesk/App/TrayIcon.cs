@@ -1,12 +1,10 @@
-using System.Drawing.Drawing2D;
-using System.Runtime.InteropServices;
 using SnapDesk.Core;
 using SnapDesk.Editor;
 using SnapDesk.UI;
 
 namespace SnapDesk;
 
-/// <summary>Tepsi simgesi ve menüsü. Simge çalışma anında vektör olarak çizilir.</summary>
+/// <summary>Sistem tepsisi simgesi ve bağlam menüsü.</summary>
 public sealed class TrayIcon : IDisposable
 {
     private readonly SnapDeskApplication _app;
@@ -107,9 +105,22 @@ public sealed class TrayIcon : IDisposable
         return item;
     }
 
-    /// <summary>Uygulama simgesi: Yürütülebilir dosyadaki gömülü simgeyi veya vektör çizimini kullanır.</summary>
+    /// <summary>Uygulama simgesi: Gömülü app.ico kaynağını veya exe simgesini yükler.</summary>
     private static Icon CreateIcon()
     {
+        try
+        {
+            using var stream = typeof(TrayIcon).Assembly.GetManifestResourceStream("SnapDesk.app.ico");
+            if (stream is not null)
+            {
+                return new Icon(stream, 32, 32);
+            }
+        }
+        catch
+        {
+            // Kaynak yüklenemezse exe'den çıkar
+        }
+
         try
         {
             var exePath = Environment.ProcessPath;
@@ -124,56 +135,11 @@ public sealed class TrayIcon : IDisposable
         }
         catch
         {
-            // Çıkarma başarısız olursa vektör çizimine geç
+            // yoksay
         }
 
-        const int size = 32;
-
-        using var bitmap = new Bitmap(size, size);
-        using var graphics = Graphics.FromImage(bitmap);
-        graphics.SmoothingMode = SmoothingMode.AntiAlias;
-        graphics.Clear(Color.Transparent);
-
-        using (var path = Theme.RoundedRect(new RectangleF(1, 1, size - 2, size - 2), 7))
-        using (var brush = new LinearGradientBrush(
-                   new Rectangle(0, 0, size, size),
-                   Color.FromArgb(64, 150, 245),
-                   Color.FromArgb(28, 100, 200),
-                   45f))
-        {
-            graphics.FillPath(brush, path);
-        }
-
-        using (var pen = new Pen(Color.White, 2.4f) { StartCap = LineCap.Round, EndCap = LineCap.Round })
-        {
-            // Kırpma köşeleri
-            graphics.DrawLine(pen, 9, 6, 9, 11);
-            graphics.DrawLine(pen, 6, 9, 11, 9);
-
-            graphics.DrawLine(pen, 23, 6, 23, 11);
-            graphics.DrawLine(pen, 21, 9, 26, 9);
-
-            graphics.DrawLine(pen, 9, 21, 9, 26);
-            graphics.DrawLine(pen, 6, 23, 11, 23);
-
-            graphics.DrawLine(pen, 23, 21, 23, 26);
-            graphics.DrawLine(pen, 21, 23, 26, 23);
-        }
-
-        var handle = bitmap.GetHicon();
-        try
-        {
-            using var temporary = Icon.FromHandle(handle);
-            return (Icon)temporary.Clone();
-        }
-        finally
-        {
-            DestroyIcon(handle);
-        }
+        return (Icon)SystemIcons.Application.Clone();
     }
-
-    [DllImport("user32.dll")]
-    private static extern bool DestroyIcon(IntPtr handle);
 
     public void Dispose()
     {
