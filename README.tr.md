@@ -4,7 +4,7 @@
 
 </div>
 
-# SnapDesk
+<h1><img src="assets/logo.png" width="34" height="34" alt="" align="absmiddle" /> SnapDesk</h1>
 
 Windows için ekran görüntüsü alma, çizim ve düzenleme, ekrana sabitleme (pin) ve yerel metin tanıma (OCR) aracı.
 

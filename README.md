@@ -4,7 +4,7 @@
 
 </div>
 
-# SnapDesk
+<h1><img src="assets/logo.png" width="34" height="34" alt="" align="absmiddle" /> SnapDesk</h1>
 
 A lightweight Windows utility for screen capture, annotation, floating pins, and OCR.
 
