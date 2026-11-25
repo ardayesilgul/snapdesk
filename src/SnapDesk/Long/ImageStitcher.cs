@@ -11,7 +11,7 @@ namespace SnapDesk.Long;
 public static class ImageStitcher
 {
     /// <summary>İki kare arasındaki dikey örtüşme satır sayısı; bulunamazsa -1.</summary>
-    public static int FindVerticalOverlap(Bitmap top, Bitmap bottom, int contentTop = 0, int minOverlap = 30, int tolerance = 14)
+    public static int FindVerticalOverlap(Bitmap top, Bitmap bottom, int contentTop = 0, int minOverlap = 24, int tolerance = 14)
     {
         if (top.Width != bottom.Width || top.Height != bottom.Height)
         {
@@ -32,57 +32,212 @@ public static class ImageStitcher
         var bottomData = ReadPixels(bottom);
 
         var stride = topData.Stride;
-        // İçerik hiç kaymadıysa örtüşme içerik yüksekliğinin tamamıdır.
-        // -8 ile sınırlamak, sabit sayfalarda her karede 8 sahte satır ekliyordu.
         var maxOverlap = contentHeight;
+        // Sağdaki kaydırma çubuğu (scrollbar) hareketinin eşleşmeyi bozmaması için kenarı hariç tut.
+        var compareWidth = width > 100 ? width - Math.Min(18, width / 10) : width;
+        var columnStep = Math.Max(1, compareWidth / 240);
 
-        // Alt karenin içerik başındaki ince bir şerit, üst karede aranır.
-        const int probeRows = 6;
-        var columnStep = Math.Max(1, width / 240);
+        // Alt karedeki her satırın detay/varyans bilgisini çıkar; boş beyaz/koyu şeritlerin
+        // yanlış eşleşmeye (buton/kart tekrarına) yol açmasını önler.
+        var rowVar = ComputeRowVariances(bottomData.Bytes, stride, contentTop, contentHeight, columnStep, compareWidth);
+        const int probeRows = 8;
+        var probeOffset = FindBestProbeOffsetFromVariances(rowVar, contentHeight / 2, probeRows);
+
         var bestScore = double.MaxValue;
         var bestOverlap = -1;
+        var fallbackScore = double.MaxValue;
+        var fallbackMatches = 0;
+        var fallbackOverlap = -1;
 
         for (var overlap = maxOverlap; overlap >= minOverlap; overlap--)
         {
-            var startRow = contentTop + contentHeight - overlap;
-            var score = RowDifference(
+            var useOffset = overlap >= probeOffset + probeRows ? probeOffset : 0;
+            var startRow = contentTop + contentHeight - overlap + useOffset;
+            var probeScore = RowDifference(
                 topData.Bytes, stride, startRow,
-                bottomData.Bytes, stride, contentTop,
-                probeRows, columnStep, width);
+                bottomData.Bytes, stride, contentTop + useOffset,
+                probeRows, columnStep, compareWidth);
 
-            if (score < bestScore)
+            // Örtüşme boyunca eşit dağıtılmış 24 satır bandını kontrol et;
+            // ayrıca gerçek içerikli (varyans > 6) satırların eşleşme sayısını ayrı izle.
+            const int sampleCount = 24;
+            var diffs = new double[sampleCount];
+            var sumDiff = 0.0;
+            var matchCount = 0;
+            var detailedTotal = 0;
+            var detailedMatchCount = 0;
+            var usableSpan = Math.Max(1, overlap - 2);
+
+            for (var s = 0; s < sampleCount; s++)
             {
-                bestScore = score;
-                bestOverlap = overlap;
+                var relRow = s * usableSpan / sampleCount;
+                var d = RowDifference(
+                    topData.Bytes, stride, contentTop + contentHeight - overlap + relRow,
+                    bottomData.Bytes, stride, contentTop + relRow,
+                    2, columnStep, compareWidth);
+                diffs[s] = d;
+                sumDiff += d;
 
-                if (score < 1.5)
+                var isDetailed = rowVar[relRow] > 6.0 || (relRow + 1 < rowVar.Length && rowVar[relRow + 1] > 6.0);
+                if (isDetailed)
                 {
-                    break;
+                    detailedTotal++;
+                    if (d <= tolerance)
+                    {
+                        detailedMatchCount++;
+                    }
+                }
+
+                if (d <= tolerance)
+                {
+                    matchCount++;
+                }
+            }
+
+            Array.Sort(diffs);
+            var secondWorstDiff = diffs[^2];
+            var worstDiff = diffs[^1];
+
+            // Katman 1: Normal / statik sayfa eşleşmesi.
+            if (probeScore <= tolerance * 1.4 && secondWorstDiff <= tolerance * 1.6)
+            {
+                var combined = (probeScore + sumDiff / sampleCount + secondWorstDiff) / 3.0;
+                if (combined < bestScore)
+                {
+                    bestScore = combined;
+                    bestOverlap = overlap;
+
+                    if (combined < 0.25 && worstDiff < 1.5)
+                    {
+                        break;
+                    }
+                }
+
+                continue;
+            }
+
+            // Katman 2: Video/animasyon oynuyorsa satırların en az %35'i ve varsa en az 2 detaylı satır eşleşmeli.
+            // Boş beyaz alanların kendi arasında eşleşip bölüm tekrarlamasını önler.
+            var minRequiredMatches = Math.Max(4, sampleCount * 35 / 100);
+            var minDetailedRequired = detailedTotal >= 2 ? 2 : 0;
+            if (matchCount >= minRequiredMatches && detailedMatchCount >= minDetailedRequired)
+            {
+                var matchedAvg = diffs.Take(matchCount).Average();
+                var weightedMatches = detailedMatchCount * 3 + matchCount;
+                if (weightedMatches > fallbackMatches || (weightedMatches == fallbackMatches && matchedAvg < fallbackScore))
+                {
+                    fallbackMatches = weightedMatches;
+                    fallbackScore = matchedAvg;
+                    fallbackOverlap = overlap;
                 }
             }
         }
 
-        if (bestOverlap < 0 || bestScore > tolerance)
+        return bestOverlap >= 0 ? bestOverlap : fallbackOverlap;
+    }
+
+    private static double[] ComputeRowVariances(
+        byte[] bytes, int stride, int contentTop, int contentHeight,
+        int columnStep, int width)
+    {
+        var variances = new double[contentHeight];
+        var prevMean = 0.0;
+        for (var r = 0; r < contentHeight; r++)
         {
-            return -1;
+            var rowOffset = (contentTop + r) * stride;
+            if (rowOffset < 0 || rowOffset + stride > bytes.Length) break;
+
+            long sum = 0;
+            long sqSum = 0;
+            long count = 0;
+            for (var x = 0; x < width; x += columnStep)
+            {
+                var idx = rowOffset + x * 4;
+                var lum = (bytes[idx] + bytes[idx + 1] + bytes[idx + 2]) / 3;
+                sum += lum;
+                sqSum += lum * (long)lum;
+                count++;
+            }
+
+            if (count > 0)
+            {
+                var mean = sum / (double)count;
+                var horizVar = sqSum / (double)count - mean * mean;
+                var vertDiff = r > 0 ? Math.Abs(mean - prevMean) : 0.0;
+                variances[r] = Math.Max(horizVar, vertDiff * vertDiff);
+                prevMean = mean;
+            }
         }
 
-        // Ek bantlarla doğrula: örtüşmenin 1/3 ve 2/3 noktaları.
-        var verifyRows = 4;
-        var a1 = contentTop + contentHeight - bestOverlap + bestOverlap / 3;
-        var b1 = contentTop + bestOverlap / 3;
-        var a2 = contentTop + contentHeight - bestOverlap + bestOverlap * 2 / 3;
-        var b2 = contentTop + bestOverlap * 2 / 3;
+        return variances;
+    }
 
-        var check1 = RowDifference(topData.Bytes, stride, a1, bottomData.Bytes, stride, b1, verifyRows, columnStep, width);
-        var check2 = RowDifference(topData.Bytes, stride, a2, bottomData.Bytes, stride, b2, verifyRows, columnStep, width);
+    private static int FindBestProbeOffsetFromVariances(double[] variances, int searchHeight, int probeRows)
+    {
+        var bestOffset = 0;
+        var bestScore = -1.0;
+        var maxOffset = Math.Max(0, Math.Min(variances.Length, searchHeight) - probeRows);
 
-        if (check1 > tolerance * 2 || check2 > tolerance * 2)
+        for (var offset = 0; offset <= maxOffset; offset += 2)
         {
-            return -1;
+            var sum = 0.0;
+            for (var r = 0; r < probeRows; r++)
+            {
+                sum += variances[offset + r];
+            }
+
+            if (sum > bestScore)
+            {
+                bestScore = sum;
+                bestOffset = offset;
+            }
         }
 
-        return bestOverlap;
+        return bestOffset;
+    }
+
+    private static List<int> SelectDetailedRows(double[] variances, int overlap, int targetCount)
+    {
+        var maxRow = Math.Max(1, Math.Min(variances.Length - 2, overlap - 2));
+        var detailed = new List<int>(targetCount);
+
+        // Önce gerçekten içerik/metin/kenarlık taşıyan (varyans > 6) satırları eşit aralıklarla al.
+        var candidateDetailed = new List<int>();
+        for (var r = 0; r <= maxRow; r++)
+        {
+            if (variances[r] > 6.0)
+            {
+                candidateDetailed.Add(r);
+            }
+        }
+
+        if (candidateDetailed.Count >= targetCount)
+        {
+            for (var i = 0; i < targetCount; i++)
+            {
+                detailed.Add(candidateDetailed[i * candidateDetailed.Count / targetCount]);
+            }
+
+            return detailed;
+        }
+
+        // Yeterli detaylı satır yoksa tümünü ekle, kalanı eşit dağıtılmış satırlarla tamamla.
+        detailed.AddRange(candidateDetailed);
+        var step = Math.Max(1, maxRow / Math.Max(1, targetCount - detailed.Count));
+        for (var r = 0; r <= maxRow && detailed.Count < targetCount; r += step)
+        {
+            if (!detailed.Contains(r))
+            {
+                detailed.Add(r);
+            }
+        }
+
+        if (detailed.Count == 0)
+        {
+            detailed.Add(0);
+        }
+
+        return detailed;
     }
 
     /// <summary>
@@ -101,12 +256,13 @@ public static class ImageStitcher
         var b = ReadPixels(second);
 
         var rowStep = 1;
-        var columnStep = Math.Max(1, first.Width / 200);
+        var compareWidth = first.Width > 100 ? first.Width - Math.Min(18, first.Width / 10) : first.Width;
+        var columnStep = Math.Max(1, compareWidth / 200);
         var header = 0;
 
         for (var row = 0; row < limit; row += rowStep)
         {
-            var diff = RowDifference(a.Bytes, a.Stride, row, b.Bytes, b.Stride, row, 1, columnStep, first.Width);
+            var diff = RowDifference(a.Bytes, a.Stride, row, b.Bytes, b.Stride, row, 1, columnStep, compareWidth);
             if (diff > tolerance)
             {
                 break;
@@ -132,16 +288,21 @@ public static class ImageStitcher
 
         var a = ReadPixels(first);
         var b = ReadPixels(second);
-        var columnStep = Math.Max(1, first.Width / 200);
+        var compareWidth = first.Width > 100 ? first.Width - Math.Min(18, first.Width / 10) : first.Width;
+        var columnStep = Math.Max(1, compareWidth / 200);
         var diff = RowDifference(
             a.Bytes, a.Stride, 0,
             b.Bytes, b.Stride, 0,
-            first.Height, columnStep, first.Width);
+            first.Height, columnStep, compareWidth);
 
         return diff <= tolerance;
     }
 
-    /// <summary>Üst görüntüye, alt görüntünün yeni satırlarını ekler.</summary>
+    /// <summary>
+    /// Üst görüntüye alt görüntünün yeni satırlarını ekler ve örtüşme bölgesini
+    /// son kareyle günceller. Böylece kaydırma sırasında oynayan video/animasyonlar
+    /// yatay olarak bölünmek yerine tutarlı tek bir kare olarak görünür.
+    /// </summary>
     public static Bitmap Append(Bitmap canvas, Bitmap frame, int contentTop, int overlap)
     {
         var newRows = frame.Height - contentTop - overlap;
@@ -154,10 +315,12 @@ public static class ImageStitcher
         using var graphics = Graphics.FromImage(result);
         graphics.DrawImage(canvas, new Rectangle(0, 0, canvas.Width, canvas.Height));
 
+        var refreshStart = Math.Max(0, canvas.Height - overlap);
+        var drawRows = overlap + newRows;
         graphics.DrawImage(
             frame,
-            new Rectangle(0, canvas.Height, frame.Width, newRows),
-            new Rectangle(0, contentTop + overlap, frame.Width, newRows),
+            new Rectangle(0, refreshStart, frame.Width, drawRows),
+            new Rectangle(0, contentTop, frame.Width, drawRows),
             GraphicsUnit.Pixel);
 
         return result;

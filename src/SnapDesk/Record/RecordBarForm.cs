@@ -1,18 +1,17 @@
 using System.Diagnostics;
 using SnapDesk.Core;
-using SnapDesk.Pin;
 using SnapDesk.UI;
 
 namespace SnapDesk.Record;
 
 /// <summary>
-/// Video kayıt çubuğu: başlat / duraklat / durdur / iptal. Kayıt bitince dosya
-/// kalıcı klasöre taşınır, istenirse GIF'e çevrilir; iptalde geçici dosyalar silinir.
+/// Bölge video kaydı kontrol çubuğu (Apple Obsidian Dynamic Island stili).
 /// </summary>
 public sealed class RecordBarForm : Form
 {
     private readonly Rectangle _region;
     private readonly Settings _settings;
+    private readonly Recorder _recorder;
     private readonly Label _time;
     private readonly Label _status;
     private readonly Button _record;
@@ -20,21 +19,22 @@ public sealed class RecordBarForm : Form
     private readonly Button _stop;
     private readonly Button _cancel;
     private readonly System.Windows.Forms.Timer _timer;
-    private readonly Recorder _recorder = new();
     private bool _started;
     private bool _finishing;
     private bool _dragging;
     private Point _dragOffset;
+    private float _pulsePhase;
 
     public static void Start(Rectangle region, Settings settings)
     {
-        if (Recorder.FindFfmpeg() is null)
+        var ffmpeg = Recorder.FindFfmpeg();
+        if (ffmpeg is null)
         {
             MessageBox.Show(
-                "Video kaydı için ffmpeg gerekli, ancak bulunamadı.\n\n" +
-                "Kurulum: winget install Gyan.FFmpeg\n" +
-                "Kurulumdan sonra SnapDesk'i yeniden başlatın.",
-                "SnapDesk — Video kaydı",
+                "Video kaydı için 'ffmpeg' gereklidir ancak sistemde bulunamadı.\n\n" +
+                "Kurulum: PowerShell'de `winget install Gyan.FFmpeg` komutunu çalıştırın " +
+                "veya ffmpeg.exe dosyasını C:\\ffmpeg\\bin klasörüne yerleştirin.",
+                "SnapDesk — ffmpeg bulunamadı",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Warning);
             return;
@@ -42,7 +42,6 @@ public sealed class RecordBarForm : Form
 
         var form = new RecordBarForm(region, settings);
         form.Show();
-        form.Activate();
     }
 
     protected override void OnHandleCreated(EventArgs e)
@@ -50,27 +49,37 @@ public sealed class RecordBarForm : Form
         base.OnHandleCreated(e);
         try
         {
-            // Kayıt çubuğunun yakalanan bölgeyle kesiştiğinde videonun içine girmesini önle.
             SetWindowDisplayAffinity(Handle, WdaExcludeFromCapture);
         }
         catch
         {
-            // Eski Windows sürümlerinde desteklenmiyorsa yoksay
+            // eski Windows sürümlerinde yoksay
         }
     }
 
-    private RecordBarForm(Rectangle region, Settings settings)
+    public RecordBarForm(Rectangle region, Settings settings)
     {
         _region = region;
         _settings = settings;
+        _recorder = new Recorder();
 
-        UiFactory.StyleForm(this);
+        SetStyle(
+            ControlStyles.AllPaintingInWmPaint |
+            ControlStyles.OptimizedDoubleBuffer |
+            ControlStyles.UserPaint |
+            ControlStyles.ResizeRedraw,
+            true);
+
         FormBorderStyle = FormBorderStyle.None;
         StartPosition = FormStartPosition.Manual;
         TopMost = true;
         ShowInTaskbar = false;
-        ClientSize = new Size(Math.Min(Math.Max(region.Width, 540), 620), 66);
+        ClientSize = new Size(Math.Min(Math.Max(region.Width, 550), 630), 68);
         BackColor = Theme.ToolbarBack;
+
+        UiFactory.ApplyRoundedRegion(this, 16);
+        UiFactory.AttachSmoothEntrance(this);
+        Resize += (_, _) => UiFactory.ApplyRoundedRegion(this, 16);
 
         var screen = Screen.FromRectangle(region).WorkingArea;
         var x = Math.Clamp(region.Left, screen.Left + 8, Math.Max(screen.Left + 8, screen.Right - Width - 8));
@@ -87,31 +96,35 @@ public sealed class RecordBarForm : Form
         Location = new Point(x, y);
 
         _time = UiFactory.Label("00:00");
-        _time.Font = new Font("Consolas", 15f, FontStyle.Bold);
-        _time.Location = new Point(32, 9);
+        _time.Font = new Font("Consolas", 14.5f, FontStyle.Bold);
+        _time.Location = new Point(34, 11);
 
         _status = UiFactory.Label($"Hazır · {_settings.RecordingFps} FPS · ses yok", small: true);
         _status.AutoSize = false;
         _status.AutoEllipsis = true;
-        _status.Location = new Point(16, 39);
-        _status.Size = new Size(ClientSize.Width - 384, 18);
+        _status.Location = new Point(18, 40);
+        _status.Size = new Size(ClientSize.Width - 392, 18);
 
-        var right = ClientSize.Width - 14;
-        _cancel = UiFactory.Button("İptal", 76, 32);
+        var right = ClientSize.Width - 16;
+        _cancel = UiFactory.Button("İptal", 76, 34);
+        _cancel.BackColor = Theme.ToolbarBack;
         _cancel.Location = new Point(right - 76, 17);
         _cancel.Click += (_, _) => CancelRecording();
 
-        _stop = UiFactory.Button("Durdur", 88, 32);
+        _stop = UiFactory.Button("Durdur", 88, 34);
+        _stop.BackColor = Theme.ToolbarBack;
         _stop.Location = new Point(right - 76 - 8 - 88, 17);
         _stop.Enabled = false;
         _stop.Click += (_, _) => StopRecording();
 
-        _pause = UiFactory.Button("Duraklat", 88, 32);
+        _pause = UiFactory.Button("Duraklat", 88, 34);
+        _pause.BackColor = Theme.ToolbarBack;
         _pause.Location = new Point(right - 76 - 8 - 88 - 8 - 88, 17);
         _pause.Enabled = false;
         _pause.Click += (_, _) => TogglePause();
 
-        _record = UiFactory.Button("Kayıt", 84, 32, primary: true);
+        _record = UiFactory.Button("Kayıt", 84, 34, primary: true);
+        _record.BackColor = Theme.ToolbarBack;
         _record.Location = new Point(right - 76 - 8 - 88 - 8 - 88 - 8 - 84, 17);
         _record.Click += (_, _) => StartRecording();
 
@@ -120,13 +133,18 @@ public sealed class RecordBarForm : Form
         EnableDrag(_time);
         EnableDrag(_status);
 
-        _timer = new System.Windows.Forms.Timer { Interval = 200 };
-        _timer.Tick += (_, _) => Tick();
+        _timer = new System.Windows.Forms.Timer { Interval = 120 };
+        _timer.Tick += (_, _) =>
+        {
+            _pulsePhase += 0.38f;
+            Tick();
+        };
         _timer.Start();
 
         FormClosed += (_, _) =>
         {
             _timer.Stop();
+            _timer.Dispose();
             if (_started && !_finishing)
             {
                 _recorder.Cancel();
@@ -156,7 +174,7 @@ public sealed class RecordBarForm : Form
         _pause.Enabled = true;
         _stop.Enabled = true;
         _status.Text = $"Kaydediliyor · {_settings.RecordingFps} FPS · ses yok";
-        _status.ForeColor = Color.FromArgb(240, 110, 110);
+        _status.ForeColor = Color.FromArgb(245, 110, 110);
         Invalidate();
     }
 
@@ -172,7 +190,7 @@ public sealed class RecordBarForm : Form
             _recorder.Resume();
             _pause.Text = "Duraklat";
             _status.Text = $"Kaydediliyor · {_settings.RecordingFps} FPS · ses yok";
-            _status.ForeColor = Color.FromArgb(240, 110, 110);
+            _status.ForeColor = Color.FromArgb(245, 110, 110);
         }
         else
         {
@@ -215,7 +233,6 @@ public sealed class RecordBarForm : Form
             target = Path.Combine(_settings.SaveFolder, _settings.BuildFileName(DateTime.Now, "mp4"));
             File.Move(element, target, true);
 
-            // Geçici segmentleri temizle
             try
             {
                 var folder = Path.GetDirectoryName(element);
@@ -299,6 +316,7 @@ public sealed class RecordBarForm : Form
 
         var elapsed = _recorder.Elapsed;
         _time.Text = $"{(int)elapsed.TotalMinutes:00}:{elapsed.Seconds:00}";
+        Invalidate(new Rectangle(8, 8, 28, 28));
 
         if (!_recorder.IsRecording && !_recorder.IsPaused && !_finishing)
         {
@@ -317,26 +335,26 @@ public sealed class RecordBarForm : Form
     protected override void OnPaint(PaintEventArgs e)
     {
         base.OnPaint(e);
-        Theme.Prepare(e.Graphics);
-
-        using (var back = new SolidBrush(Theme.ToolbarBack))
-        {
-            e.Graphics.FillRectangle(back, new Rectangle(0, 0, ClientSize.Width, ClientSize.Height));
-        }
+        Theme.PaintObsidianSurface(e.Graphics, Width, Height, 16f);
 
         var dotColor = !_started
             ? Color.FromArgb(115, 115, 125)
             : _recorder.IsPaused
                 ? Color.FromArgb(245, 195, 80)
-                : Color.FromArgb(238, 76, 76);
+                : Color.FromArgb(255, 69, 58);
+
+        if (_started && !_recorder.IsPaused)
+        {
+            var pulse = (float)(0.5 + 0.5 * Math.Sin(_pulsePhase));
+            var haloAlpha = (int)(35 + pulse * 60);
+            using var haloBrush = new SolidBrush(Color.FromArgb(haloAlpha, dotColor));
+            e.Graphics.FillEllipse(haloBrush, 14f, 15f, 16f, 16f);
+        }
 
         using (var dotBrush = new SolidBrush(dotColor))
         {
-            e.Graphics.FillEllipse(dotBrush, 16, 15, 10, 10);
+            e.Graphics.FillEllipse(dotBrush, 18f, 19f, 8f, 8f);
         }
-
-        using var border = new Pen(Theme.ToolbarBorder);
-        e.Graphics.DrawRectangle(border, 0, 0, Width - 1, Height - 1);
     }
 
     private void EnableDrag(Control control)

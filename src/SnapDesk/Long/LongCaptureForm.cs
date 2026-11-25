@@ -4,8 +4,7 @@ using SnapDesk.UI;
 namespace SnapDesk.Long;
 
 /// <summary>
-/// Uzun yakalama: seçilen bölgeyi kaydırarak tekrar tekrar yakalar, örtüşmeyi
-/// bulup dikey olarak birleştirir. Sabit başlık yalnızca bir kez eklenir.
+/// Uzun (kaydırmalı) yakalama kontrol çubuğu (Apple Obsidian Dynamic Island stili).
 /// </summary>
 public sealed class LongCaptureForm : Form
 {
@@ -16,20 +15,20 @@ public sealed class LongCaptureForm : Form
     private readonly Button _cancel;
     private readonly System.Windows.Forms.Timer _timer;
     private CancellationTokenSource? _cts;
-    private DateTime _startedAt;
-    private int _frames;
-    private int _headerHeight;
     private bool _finished;
     private bool _canceled;
     private bool _stopRequested;
+    private int _frames;
+    private int _headerHeight;
+    private DateTime _startedAt;
     private bool _dragging;
     private Point _dragOffset;
+    private float _pulsePhase;
 
     public static void Start(Rectangle region, Settings settings)
     {
         var form = new LongCaptureForm(region, settings);
         form.Show();
-        form.BeginCapture();
     }
 
     protected override void OnHandleCreated(EventArgs e)
@@ -37,27 +36,42 @@ public sealed class LongCaptureForm : Form
         base.OnHandleCreated(e);
         try
         {
-            // Kontrol çubuğunun yakalanan bölgeyle kesiştiğinde karelerin içine girmesini önle.
             SetWindowDisplayAffinity(Handle, WdaExcludeFromCapture);
         }
         catch
         {
-            // Eski Windows sürümlerinde desteklenmiyorsa yoksay
+            // eski yapılarda yoksay
         }
     }
 
-    private LongCaptureForm(Rectangle region, Settings settings)
+    protected override void OnShown(EventArgs e)
+    {
+        base.OnShown(e);
+        BeginCapture();
+    }
+
+    public LongCaptureForm(Rectangle region, Settings settings)
     {
         _region = region;
         _settings = settings;
 
-        UiFactory.StyleForm(this);
+        SetStyle(
+            ControlStyles.AllPaintingInWmPaint |
+            ControlStyles.OptimizedDoubleBuffer |
+            ControlStyles.UserPaint |
+            ControlStyles.ResizeRedraw,
+            true);
+
         FormBorderStyle = FormBorderStyle.None;
         StartPosition = FormStartPosition.Manual;
         TopMost = true;
         ShowInTaskbar = false;
-        ClientSize = new Size(Math.Min(Math.Max(region.Width, 620), 740), 74);
+        ClientSize = new Size(Math.Min(Math.Max(region.Width, 620), 740), 72);
         BackColor = Theme.ToolbarBack;
+
+        UiFactory.ApplyRoundedRegion(this, 16);
+        UiFactory.AttachSmoothEntrance(this);
+        Resize += (_, _) => UiFactory.ApplyRoundedRegion(this, 16);
 
         var screen = Screen.FromRectangle(region).WorkingArea;
         var x = Math.Clamp(region.Left, screen.Left + 8, Math.Max(screen.Left + 8, screen.Right - Width - 8));
@@ -77,21 +91,23 @@ public sealed class LongCaptureForm : Form
         _status.Font = Theme.UiFontBold;
         _status.AutoSize = false;
         _status.AutoEllipsis = true;
-        _status.Location = new Point(16, 14);
-        _status.Size = new Size(ClientSize.Width - 292, 20);
+        _status.Location = new Point(34, 15);
+        _status.Size = new Size(ClientSize.Width - 314, 20);
 
         var hint = UiFactory.Label("Sayfa kaydırılarak birleştiriliyor · çubuk ve imleç kayda girmez", small: true);
         hint.AutoSize = false;
         hint.AutoEllipsis = true;
-        hint.Location = new Point(16, 38);
-        hint.Size = new Size(ClientSize.Width - 292, 18);
+        hint.Location = new Point(34, 38);
+        hint.Size = new Size(ClientSize.Width - 314, 18);
 
-        _stop = UiFactory.Button("Durdur ve birleştir", 160, 32, primary: true);
-        _stop.Location = new Point(ClientSize.Width - 268, 21);
+        _stop = UiFactory.Button("Durdur ve birleştir", 162, 34, primary: true);
+        _stop.BackColor = Theme.ToolbarBack;
+        _stop.Location = new Point(ClientSize.Width - 270, 19);
         _stop.Click += (_, _) => Finish();
 
-        _cancel = UiFactory.Button("İptal", 88, 32);
-        _cancel.Location = new Point(ClientSize.Width - 100, 21);
+        _cancel = UiFactory.Button("İptal", 88, 34);
+        _cancel.BackColor = Theme.ToolbarBack;
+        _cancel.Location = new Point(ClientSize.Width - 100, 19);
         _cancel.Click += (_, _) => CancelCapture();
 
         Controls.AddRange(new Control[] { _status, hint, _stop, _cancel });
@@ -99,13 +115,18 @@ public sealed class LongCaptureForm : Form
         EnableDrag(_status);
         EnableDrag(hint);
 
-        _timer = new System.Windows.Forms.Timer { Interval = 250 };
-        _timer.Tick += (_, _) => UpdateStatus();
+        _timer = new System.Windows.Forms.Timer { Interval = 120 };
+        _timer.Tick += (_, _) =>
+        {
+            _pulsePhase += 0.35f;
+            UpdateStatus();
+        };
 
         FormClosed += (_, _) =>
         {
             _cts?.Cancel();
             _timer.Stop();
+            _timer.Dispose();
         };
     }
 
@@ -124,8 +145,6 @@ public sealed class LongCaptureForm : Form
 
         try
         {
-            // İlk bekleme de iptal edilebilir olmalı; aksi hâlde ilk 350 ms
-            // içinde "İptal"e basmak yakalanmamış bir istisna üretiyordu.
             await Task.Delay(350, token);
 
             var first = ScreenCapture.CaptureRegion(_region);
@@ -134,22 +153,30 @@ public sealed class LongCaptureForm : Form
             _frames = 1;
             _headerHeight = 0;
 
+            var stalledScrolls = 0;
             while (!token.IsCancellationRequested
                    && !_stopRequested
-                   && _frames < 80
+                   && _frames < 160
                    && canvas.Height < 30000)
             {
                 ScrollDown();
-                await Task.Delay(430, token);
+                await Task.Delay(480, token);
 
                 var current = ScreenCapture.CaptureRegion(_region);
 
                 if (ImageStitcher.FramesNearlyEqual(previous, current))
                 {
-                    // Sayfa kaydırılamıyor (veya aynı kare); birleştirmeye
-                    // devam etmek yinelenen içerik üretir.
+                    // Sayfa geç yükleniyor veya kaydırma yumuşatma animasyonu yeni başlıyor olabilir; 1 kez daha dene.
                     current.Dispose();
-                    break;
+                    ScrollDown();
+                    await Task.Delay(480, token);
+                    current = ScreenCapture.CaptureRegion(_region);
+
+                    if (ImageStitcher.FramesNearlyEqual(previous, current))
+                    {
+                        current.Dispose();
+                        break;
+                    }
                 }
 
                 if (_frames == 1)
@@ -157,19 +184,40 @@ public sealed class LongCaptureForm : Form
                     _headerHeight = ImageStitcher.DetectFixedHeader(previous, current);
                 }
 
-                var overlap = ImageStitcher.FindVerticalOverlap(previous, current, _headerHeight, 30);
+                var overlap = ImageStitcher.FindVerticalOverlap(previous, current, _headerHeight, 24);
+                var newRows = overlap >= 0 ? current.Height - _headerHeight - overlap : -1;
+
                 if (overlap < 0)
                 {
+                    // Kaydırma çok hızlı geçtiyse veya animasyon ekranı tamamen değiştirdiyse
+                    // previous'ı bozmadan bir kez daha bekle/kontrol et; atlama (boşluk) oluşturma.
+                    stalledScrolls++;
+                    current.Dispose();
+                    if (stalledScrolls <= 3)
+                    {
+                        await Task.Delay(350, token);
+                        continue;
+                    }
+
+                    break;
+                }
+
+                if (newRows < 3)
+                {
+                    // Sayfa henüz dikeyde ilerlemediyse (scroll-hijack bileşeni); previous'ı güncelleyip devam et.
+                    stalledScrolls++;
+                    if (stalledScrolls <= 4)
+                    {
+                        previous.Dispose();
+                        previous = current;
+                        continue;
+                    }
+
                     current.Dispose();
                     break;
                 }
 
-                var newRows = current.Height - _headerHeight - overlap;
-                if (newRows < 3)
-                {
-                    current.Dispose();
-                    break;
-                }
+                stalledScrolls = 0;
 
                 var merged = ImageStitcher.Append(canvas, current, _headerHeight, overlap);
                 canvas.Dispose();
@@ -234,7 +282,6 @@ public sealed class LongCaptureForm : Form
             return;
         }
 
-        // İlk kare henüz alınmadıysa iptal etmek yerine bir kare alıp bitir.
         if (_frames == 0)
         {
             _stopRequested = true;
@@ -245,9 +292,6 @@ public sealed class LongCaptureForm : Form
 
         _stop.Enabled = false;
         _status.Text = "Kareler birleştiriliyor…";
-
-        // Sonucun atılmaması için yalnızca bekleme/lerleme döngüsünü durdur;
-        // _finished yalnızca sonuç gösterilirken veya iptalde işaretlenir.
         _cts?.Cancel();
     }
 
@@ -300,22 +344,28 @@ public sealed class LongCaptureForm : Form
     protected override void OnPaint(PaintEventArgs e)
     {
         base.OnPaint(e);
+        Theme.PaintObsidianSurface(e.Graphics, Width, Height, 16f);
 
-        using (var back = new SolidBrush(Theme.ToolbarBack))
+        // Sol üstte mikro-animasyonlu nabız noktası
+        var pulse = (float)(0.5 + 0.5 * Math.Sin(_pulsePhase));
+        var haloAlpha = (int)(30 + pulse * 55);
+        using (var haloBrush = new SolidBrush(Color.FromArgb(haloAlpha, Theme.AppleBlue)))
         {
-            e.Graphics.FillRectangle(back, new Rectangle(0, 0, ClientSize.Width, ClientSize.Height));
-            e.Graphics.ResetClip();
+            e.Graphics.FillEllipse(haloBrush, 13f, 16f, 14f, 14f);
         }
 
-        using var border = new Pen(Theme.ToolbarBorder);
-        e.Graphics.DrawRectangle(border, 0, 0, Width - 1, Height - 1);
+        using (var dotBrush = new SolidBrush(Theme.AppleBlue))
+        {
+            e.Graphics.FillEllipse(dotBrush, 16f, 19f, 8f, 8f);
+        }
     }
 
     private void ScrollDown()
     {
         var center = new Point(_region.Left + _region.Width / 2, _region.Top + _region.Height / 2);
         SetCursorPos(center.X, center.Y);
-        mouse_event(MouseeventfWheel, 0, 0, -120 * 3, UIntPtr.Zero);
+        var notches = _region.Height < 320 ? 1 : _region.Height < 650 ? 2 : 3;
+        mouse_event(MouseeventfWheel, 0, 0, -120 * notches, UIntPtr.Zero);
     }
 
     private void EnableDrag(Control control)
@@ -348,65 +398,73 @@ public sealed class LongCaptureForm : Form
     private static extern bool SetWindowDisplayAffinity(IntPtr hWnd, uint dwAffinity);
 }
 
-/// <summary>Uzun yakalama sonucu: kaydırılabilir önizleme + kaydet/kopyala/pin.</summary>
+/// <summary>Uzun yakalama sonucu: tam sayfa sığdırılmış önizleme + kaydet/kopyala/pin.</summary>
 public sealed class LongResultForm : Form
 {
     private readonly Bitmap _image;
     private readonly Settings _settings;
     private readonly Panel _viewport;
+    private readonly PictureBox _picture;
     private float _zoom = 1f;
+    private bool _userZoomed;
 
     public LongResultForm(Bitmap image, Settings settings, bool scrolled)
     {
         _image = image;
         _settings = settings;
 
+        SetStyle(
+            ControlStyles.AllPaintingInWmPaint |
+            ControlStyles.OptimizedDoubleBuffer |
+            ControlStyles.UserPaint |
+            ControlStyles.ResizeRedraw,
+            true);
+
         UiFactory.StyleForm(this);
-        Text = "SnapDesk - Uzun yakalama sonucu";
+        UiFactory.AttachSmoothEntrance(this);
+        Text = "SnapDesk — Uzun Yakalama Sonucu";
         TopMost = true;
         StartPosition = FormStartPosition.CenterScreen;
         ClientSize = new Size(920, 720);
-        MinimumSize = new Size(520, 400);
+        MinimumSize = new Size(560, 420);
 
         var title = UiFactory.Label(scrolled
-            ? $"Uzun yakalama tamamlandı · {image.Width} × {image.Height} px"
+            ? $"Uzun Yakalama · {image.Width} × {image.Height} px"
             : "İçerik kaymadığı için tek kare yakalandı");
-        title.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
-        title.Location = new Point(16, 12);
+        title.Font = Theme.TitleFont;
+        title.Location = new Point(22, 16);
 
-        _viewport = new Panel
-        {
-            Location = new Point(16, 44),
-            Size = new Size(ClientSize.Width - 32, ClientSize.Height - 108),
-            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom,
-            AutoScroll = true,
-            BackColor = Color.FromArgb(18, 18, 22),
-        };
+        _viewport = UiFactory.CardPanel(Color.FromArgb(14, 14, 18), 10f);
+        _viewport.Location = new Point(22, 54);
+        _viewport.Size = new Size(ClientSize.Width - 44, ClientSize.Height - 122);
+        _viewport.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom;
+        _viewport.AutoScroll = true;
+        _viewport.Padding = new Padding(8);
 
-        var picture = new PictureBox
+        _picture = new PictureBox
         {
             Image = _image,
-            SizeMode = PictureBoxSizeMode.AutoSize,
-            Location = new Point(0, 0),
+            SizeMode = PictureBoxSizeMode.StretchImage,
+            Location = new Point(8, 8),
         };
-        _viewport.Controls.Add(picture);
+        _viewport.Controls.Add(_picture);
 
-        var hint = UiFactory.Label("Ctrl + fare tekerleği: yakınlaştır", small: true);
-        hint.Location = new Point(16, ClientSize.Height - 44);
+        var hint = UiFactory.Label("Ctrl + fare tekerleği ile yakınlaştır", small: true);
+        hint.Location = new Point(22, ClientSize.Height - 44);
         hint.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
 
-        var save = UiFactory.Button("Kaydet", 100, 32);
-        save.Location = new Point(ClientSize.Width - 440, ClientSize.Height - 50);
+        var save = UiFactory.Button("Kaydet", 104, 34);
+        save.Location = new Point(ClientSize.Width - 458, ClientSize.Height - 52);
         save.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
         save.Click += (_, _) => Save();
 
-        var copy = UiFactory.Button("Kopyala", 100, 32, primary: true);
-        copy.Location = new Point(ClientSize.Width - 332, ClientSize.Height - 50);
+        var copy = UiFactory.Button("Kopyala", 104, 34, primary: true);
+        copy.Location = new Point(ClientSize.Width - 346, ClientSize.Height - 52);
         copy.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
         copy.Click += (_, _) => Copy();
 
-        var pin = UiFactory.Button("Sabitle", 100, 32);
-        pin.Location = new Point(ClientSize.Width - 224, ClientSize.Height - 50);
+        var pin = UiFactory.Button("Sabitle", 104, 34);
+        pin.Location = new Point(ClientSize.Width - 234, ClientSize.Height - 52);
         pin.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
         pin.Click += (_, _) =>
         {
@@ -417,8 +475,8 @@ public sealed class LongResultForm : Form
             Close();
         };
 
-        var close = UiFactory.Button("Kapat", 100, 32);
-        close.Location = new Point(ClientSize.Width - 116, ClientSize.Height - 50);
+        var close = UiFactory.Button("Kapat", 100, 34);
+        close.Location = new Point(ClientSize.Width - 122, ClientSize.Height - 52);
         close.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
         close.Click += (_, _) => Close();
 
@@ -428,7 +486,7 @@ public sealed class LongResultForm : Form
         {
             if ((ModifierKeys & Keys.Control) == 0)
             {
-                return; // Ctrl yoksa normal dikey kaydırma
+                return;
             }
 
             if (e is HandledMouseEventArgs hme)
@@ -436,24 +494,55 @@ public sealed class LongResultForm : Form
                 hme.Handled = true;
             }
 
-            Zoom(e.Delta > 0 ? 1.1f : 1 / 1.1f);
+            _userZoomed = true;
+            Zoom(e.Delta > 0 ? 1.15f : 1 / 1.15f);
         };
         _viewport.MouseEnter += (_, _) => _viewport.Focus();
-        Shown += (_, _) => _viewport.Focus();
+        _viewport.Resize += (_, _) =>
+        {
+            if (!_userZoomed)
+            {
+                FitToViewport();
+            }
+            else
+            {
+                CenterPicture();
+            }
+        };
+        Shown += (_, _) =>
+        {
+            FitToViewport();
+            _viewport.Focus();
+        };
 
         FormClosed += (_, _) => _image.Dispose();
     }
 
-    private void Zoom(float factor)
+    private void FitToViewport()
     {
-        _zoom = Math.Clamp(_zoom * factor, 0.1f, 4f);
-        if (_viewport.Controls.Count > 0 && _viewport.Controls[0] is PictureBox picture)
-        {
-            picture.Size = new Size(
-                Math.Max(1, (int)(_image.Width * _zoom)),
-                Math.Max(1, (int)(_image.Height * _zoom)));
-            picture.SizeMode = PictureBoxSizeMode.StretchImage;
-        }
+        if (_image.Width <= 0 || _image.Height <= 0) return;
+        var availW = Math.Max(40, _viewport.ClientSize.Width - 24);
+        var availH = Math.Max(40, _viewport.ClientSize.Height - 24);
+        var fit = Math.Min(availW / (float)_image.Width, availH / (float)_image.Height);
+        ApplyZoom(Math.Clamp(fit, 0.02f, 1f));
+    }
+
+    private void Zoom(float factor) => ApplyZoom(Math.Clamp(_zoom * factor, 0.02f, 4f));
+
+    private void ApplyZoom(float zoom)
+    {
+        _zoom = zoom;
+        _picture.Size = new Size(
+            Math.Max(1, (int)Math.Round(_image.Width * _zoom)),
+            Math.Max(1, (int)Math.Round(_image.Height * _zoom)));
+        CenterPicture();
+    }
+
+    private void CenterPicture()
+    {
+        var x = Math.Max(8, (_viewport.ClientSize.Width - _picture.Width) / 2);
+        var y = Math.Max(8, (_viewport.ClientSize.Height - _picture.Height) / 2);
+        _picture.Location = new Point(x, y);
     }
 
     private void Copy()
@@ -461,6 +550,7 @@ public sealed class LongResultForm : Form
         try
         {
             ClipboardHelper.CopyImage(_image);
+            Close();
         }
         catch (Exception ex)
         {
@@ -487,15 +577,15 @@ public sealed class LongResultForm : Form
 
         try
         {
-            var extension = Path.GetExtension(dialog.FileName).ToLowerInvariant();
-            var format = extension is ".jpg" or ".jpeg"
+            var format = Path.GetExtension(dialog.FileName).Equals(".jpg", StringComparison.OrdinalIgnoreCase)
                 ? System.Drawing.Imaging.ImageFormat.Jpeg
                 : System.Drawing.Imaging.ImageFormat.Png;
             _image.Save(dialog.FileName, format);
+            Close();
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, "Görüntü kaydedilemedi: " + ex.Message, "SnapDesk",
+            MessageBox.Show(this, "Kaydedilemedi: " + ex.Message, "SnapDesk",
                 MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
     }

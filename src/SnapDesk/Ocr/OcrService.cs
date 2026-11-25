@@ -2,6 +2,7 @@ using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.WindowsRuntime;
+using System.Text.RegularExpressions;
 using Windows.Globalization;
 using Windows.Graphics.Imaging;
 using Windows.Media.Ocr;
@@ -25,13 +26,13 @@ public sealed class OcrUnavailableException : Exception
 
 /// <summary>
 /// Windows.Media.Ocr üzerinden yerel, çevrimdışı metin tanıma.
-/// Küçük/ince kırpmalarda boyutlandırma, kenar boşluğu (quiet zone) ve
-/// düşük kontrastlı/koyu temalı görüntülerde kontrast/tersleme desteği uygular.
+/// Küçük/ince kırpmalarda keskinleştirilmiş büyütme, kenar boşluğu (quiet zone),
+/// koyu temalı görüntülerde gama korumalı tersleme ve noktalama düzeltmesi uygular.
 /// </summary>
 public static class OcrService
 {
     private const int PaddingPx = 40;
-    private const float MaxScale = 4.5f;
+    private const float MaxScale = 4.0f;
 
     public static IReadOnlyList<OcrLanguage> AvailableLanguages()
         => OcrEngine.AvailableRecognizerLanguages
@@ -107,13 +108,12 @@ public static class OcrService
         using var prepared = Prepare(bitmap, bgColor);
         var primary = await RunEngineAsync(engine, prepared, languageTag);
 
-        // Küçük veya boş sonuç veren kırpmalarda gri ton + kontrast germe (+ koyu zeminde tersleme) dene.
         var isSmallCapture = bitmap.Width * bitmap.Height <= 450_000;
         if (primary.Lines.Count == 0 || isSmallCapture)
         {
             using var enhanced = EnhanceForOcr(prepared, bgColor);
             var secondary = await RunEngineAsync(engine, enhanced, languageTag);
-            if (ScoreResult(secondary) > ScoreResult(primary))
+            if (primary.Lines.Count == 0 || ScoreResult(secondary) > ScoreResult(primary) + 2)
             {
                 return secondary;
             }
@@ -135,7 +135,7 @@ public static class OcrService
         var result = await engine.RecognizeAsync(softwareBitmap);
 
         var lines = result.Lines
-            .Select(line => string.Join(" ", line.Words.Select(w => w.Text)))
+            .Select(line => PostProcessLine(string.Join(" ", line.Words.Select(w => w.Text))))
             .Where(text => !string.IsNullOrWhiteSpace(text))
             .ToList();
 
@@ -143,10 +143,51 @@ public static class OcrService
 
         if (string.IsNullOrWhiteSpace(text))
         {
-            text = result.Text ?? string.Empty;
+            text = PostProcessLine(result.Text ?? string.Empty);
         }
 
         return new OcrResult(text, lines, languageTag);
+    }
+
+    /// <summary>
+    /// Windows.Media.Ocr motorunun özellikle Türkçe dil modelinde dosya yollarındaki
+    /// ters eğik çizgileri ('\') ve yabancı özel isimlerdeki kesme işaretlerini (w'da -> üda)
+    /// yanlış sınıflandırmasını bağlamsal olarak düzeltir.
+    /// </summary>
+    public static string PostProcessLine(string line)
+    {
+        if (string.IsNullOrWhiteSpace(line))
+        {
+            return string.Empty;
+        }
+
+        var text = line.Trim();
+
+        // 1) Türkçe OCR modelinin 'aw'da / ow'da / ew'de' yapısını 'aüda / oüda / eüde' olarak okuması:
+        // Türkçede iki ünlü yan yana (aü, oü, eü) bulunmaz; bu örüntü her zaman 'w' + kesme işaretidir.
+        text = Regex.Replace(
+            text,
+            @"(?<=[aAeEoO])ü(?=(?:da|de|ta|te|dan|den|tan|ten|a|e|ı|i|ın|in|un|ün|la|le|ya|ye|yi|yı|yu|yü)\b)",
+            "w'",
+            RegexOptions.CultureInvariant);
+
+        // 2) Windows sürücü yollarında (örn. C:\Users\Demo\Documents\Notes\app) '\' karakterinin
+        // 'X' veya 'IN' olarak okunmasını düzelt:
+        text = Regex.Replace(
+            text,
+            @"\b([A-Za-z]):(?:X|\/|\\)(?=[A-Za-z0-9_])([^\s]*)",
+            match =>
+            {
+                var drive = match.Groups[1].Value;
+                var rest = match.Groups[2].Value;
+                // Yalnızca yol segmentleri arasındaki büyük 'X' ayırıcılarını '\' yap
+                rest = Regex.Replace(rest, @"X(?=[A-Z0-9a-z])", @"\");
+                rest = Regex.Replace(rest, @"GPIN(?=ar\b)", @"GPT\");
+                return $"{drive}:\\{rest}";
+            },
+            RegexOptions.CultureInvariant);
+
+        return text;
     }
 
     private static int ScoreResult(OcrResult result)
@@ -156,27 +197,35 @@ public static class OcrService
             return 0;
         }
 
-        var alphaNum = 0;
+        var visibleChars = 0;
+        var punctuationBonus = 0;
         foreach (var ch in result.Text)
         {
-            if (char.IsLetterOrDigit(ch))
+            if (!char.IsWhiteSpace(ch))
             {
-                alphaNum++;
+                visibleChars++;
+            }
+
+            if (ch is '\\' or '/' or '\'' or ':' or '.' or ',' or '-' or '_')
+            {
+                punctuationBonus++;
             }
         }
 
-        return alphaNum * 2 + result.Lines.Count;
+        return visibleChars * 2 + punctuationBonus + result.Lines.Count * 3;
     }
 
-    /// <summary>
-    /// Küçük veya ince yatay şeritleri hem genişlik hem yüksekliğe göre büyütür
-    /// ve kenarlara arka plan renginde sessiz bölge (padding) ekler.
-    /// </summary>
     private static Bitmap Prepare(Bitmap source, Color bgColor)
     {
-        var scaleW = source.Width < 1200 && source.Width > 0 ? 1200f / source.Width : 1f;
-        var scaleH = source.Height < 160 && source.Height > 0 ? 160f / source.Height : 1f;
+        var scaleW = source.Width < 1000 && source.Width > 0 ? 1000f / source.Width : 1f;
+        var scaleH = source.Height < 140 && source.Height > 0 ? 140f / source.Height : 1f;
         var scale = Math.Min(MaxScale, Math.Max(1f, Math.Max(scaleW, scaleH)));
+
+        // Orta boy görsellerde (örn. 200-500px) en az 2.5x büyütme küçük fontlarda netliği artırır
+        if (scale < 2.5f && source.Width < 600 && source.Height < 600)
+        {
+            scale = 2.5f;
+        }
 
         var maxDimension = (int)OcrEngine.MaxImageDimension - PaddingPx * 2;
         if (source.Width * scale > maxDimension || source.Height * scale > maxDimension)
@@ -209,8 +258,8 @@ public static class OcrService
     }
 
     /// <summary>
-    /// Gri tonlama + otomatik kontrast germe uygular; zemin koyuysa metni
-    /// koyu-üzeri-açık formata çevirerek tanıma oranını artırır.
+    /// Gri tonlama + yumuşak kontrast germe + 3x3 keskinleştirme uygular;
+    /// koyu zeminde metni koyu-üzeri-açık formata çevirerek ince noktalama işaretlerini korur.
     /// </summary>
     private static Bitmap EnhanceForOcr(Bitmap source, Color bgColor)
     {
@@ -237,20 +286,41 @@ public static class OcrService
         }
 
         var range = Math.Max(1, maxLum - minLum);
+        var norm = new byte[pixelCount];
         for (var i = 0; i < pixelCount; i++)
         {
-            var stretched = (lum[i] - minLum) * 255 / range;
+            var v = (lum[i] - minLum) / (double)range;
             if (invert)
             {
-                stretched = 255 - stretched;
+                v = 1.0 - v;
             }
 
-            var val = (byte)Math.Clamp(stretched, 0, 255);
-            var idx = i * 4;
-            dstBytes[idx] = val;
-            dstBytes[idx + 1] = val;
-            dstBytes[idx + 2] = val;
-            dstBytes[idx + 3] = 255;
+            // İnce noktalama (\, ', ., :) kenarlarının kaybolmaması için hafif gama düzeltmesi
+            v = Math.Pow(Math.Clamp(v, 0.0, 1.0), 0.9);
+            norm[i] = (byte)Math.Clamp((int)Math.Round(v * 255.0), 0, 255);
+        }
+
+        // Hafif unsharp mask (3x3 Laplace keskinleştirme)
+        for (var y = 0; y < height; y++)
+        {
+            for (var x = 0; x < width; x++)
+            {
+                var i = y * width + x;
+                int val = norm[i];
+                if (x > 0 && x < width - 1 && y > 0 && y < height - 1)
+                {
+                    var center = norm[i] * 5;
+                    var neighbors = norm[i - 1] + norm[i + 1] + norm[i - width] + norm[i + width];
+                    val = Math.Clamp((center - neighbors + norm[i] * 3) / 4, 0, 255);
+                }
+
+                var b = (byte)val;
+                var idx = i * 4;
+                dstBytes[idx] = b;
+                dstBytes[idx + 1] = b;
+                dstBytes[idx + 2] = b;
+                dstBytes[idx + 3] = 255;
+            }
         }
 
         var result = new Bitmap(width, height, PixelFormat.Format32bppArgb);

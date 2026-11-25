@@ -10,6 +10,8 @@ A lightweight Windows utility for screen capture, annotation, floating pins, and
 
 SnapDesk runs entirely offline with zero telemetry, accounts, or background network requests. Built with .NET 10 and C# for Windows.
 
+[**Download for Windows (x64)**](https://github.com/ardayesilgul/snapdesk/releases/latest/download/SnapDesk.exe) · [All Releases](https://github.com/ardayesilgul/snapdesk/releases)
+
 ![SnapDesk Interface](assets/showcase.jpg)
 
 ## Features

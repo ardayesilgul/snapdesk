@@ -1,11 +1,11 @@
+using System.Drawing.Drawing2D;
 using SnapDesk.Core;
 using SnapDesk.UI;
 
 namespace SnapDesk.Ocr;
 
 /// <summary>
-/// Metin tanıma penceresi. Metin düzenlenebilir; kopyalama panoya UTF-8
-/// olarak yazar. Dil paketi eksikse suçlamak yerine kurulum adımını gösterir.
+/// Metin tanıma penceresi (Apple Obsidian & Linear tasarım dili).
 /// </summary>
 public sealed class OcrForm : Form
 {
@@ -31,24 +31,36 @@ public sealed class OcrForm : Form
         _image = image;
         _settings = settings;
 
+        SetStyle(
+            ControlStyles.AllPaintingInWmPaint |
+            ControlStyles.OptimizedDoubleBuffer |
+            ControlStyles.UserPaint |
+            ControlStyles.ResizeRedraw,
+            true);
+
         UiFactory.StyleForm(this);
-        Text = "SnapDesk — Metin tanıma";
+        UiFactory.AttachSmoothEntrance(this);
+        Text = "SnapDesk — Metin Tanıma";
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(740, 610);
-        MinimumSize = new Size(640, 460);
+        ClientSize = new Size(760, 640);
+        MinimumSize = new Size(680, 480);
         ShowInTaskbar = true;
         KeyPreview = true;
 
-        var title = UiFactory.Label("Metin tanıma");
-        title.Font = new Font("Segoe UI", 12f, FontStyle.Bold);
-        title.Location = new Point(16, 12);
+        var title = UiFactory.Label("Metin Tanıma");
+        title.Font = Theme.TitleFont;
+        title.Location = new Point(22, 18);
+
+        var subtitle = UiFactory.Label("Yerel OCR · Çevrimdışı", small: true);
+        subtitle.ForeColor = Theme.MutedText;
+        subtitle.Location = new Point(24, 44);
 
         var languageLabel = UiFactory.Label("Dil", small: true);
-        languageLabel.Location = new Point(16, 49);
+        languageLabel.Location = new Point(210, 26);
 
         _language = UiFactory.Combo();
-        _language.Location = new Point(48, 46);
-        _language.Width = 224;
+        _language.Location = new Point(236, 22);
+        _language.Width = 216;
         _language.SelectedIndexChanged += (_, _) =>
         {
             if (_language.SelectedItem is LanguageItem item && item.Tag != _lastLanguageTag)
@@ -57,40 +69,36 @@ public sealed class OcrForm : Form
             }
         };
 
-        _rescan = UiFactory.Button("Yeniden tara", 110, 28);
-        _rescan.Location = new Point(282, 44);
+        _rescan = UiFactory.Button("Yeniden tara", 112, 30);
+        _rescan.Location = new Point(462, 20);
         _rescan.Click += (_, _) => Recognize(_lastLanguageTag);
 
-        _showImage = UiFactory.Check("Orijinal görüntüyü göster", true);
-        _showImage.Location = new Point(406, 48);
+        _showImage = UiFactory.Check("Görseli göster", true);
+        _showImage.Location = new Point(588, 24);
         _showImage.CheckedChanged += (_, _) => UpdatePreviewVisibility();
 
-        _preview = new Panel
-        {
-            Location = new Point(16, 82),
-            Width = ClientSize.Width - 32,
-            Height = 150,
-            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-            BackColor = Color.FromArgb(20, 20, 24),
-            BorderStyle = BorderStyle.FixedSingle,
-        };
+        _preview = UiFactory.CardPanel(Color.FromArgb(14, 14, 18), 10f);
+        _preview.Location = new Point(22, 74);
+        _preview.Width = ClientSize.Width - 44;
+        _preview.Height = 164;
+        _preview.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
         _preview.Paint += PaintPreview;
 
         _text = UiFactory.TextBox(multiline: true);
-        _text.Location = new Point(16, 242);
-        _text.Size = new Size(ClientSize.Width - 32, ClientSize.Height - 242 - 92);
+        _text.Location = new Point(30, 258);
+        _text.Size = new Size(ClientSize.Width - 60, ClientSize.Height - 258 - 110);
         _text.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom;
         _text.Font = new Font("Segoe UI", 10.5f);
         _text.WordWrap = true;
         _text.Text = string.Empty;
 
         _keepLines = UiFactory.Check("Satır sonlarını koru", true);
-        _keepLines.Location = new Point(16, ClientSize.Height - 80);
+        _keepLines.Location = new Point(22, ClientSize.Height - 86);
         _keepLines.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
         _keepLines.CheckedChanged += (_, _) => ApplyLayout();
 
         _autoCopy = UiFactory.Check("Sonraki sefer doğrudan kopyala", settings.AutoCopyOcrText);
-        _autoCopy.Location = new Point(196, ClientSize.Height - 80);
+        _autoCopy.Location = new Point(196, ClientSize.Height - 86);
         _autoCopy.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
         _autoCopy.CheckedChanged += (_, _) =>
         {
@@ -101,33 +109,33 @@ public sealed class OcrForm : Form
         _status = UiFactory.Label(string.Empty, small: true);
         _status.AutoSize = false;
         _status.AutoEllipsis = true;
-        _status.Location = new Point(16, ClientSize.Height - 44);
-        _status.Size = new Size(ClientSize.Width - 484, 22);
+        _status.Location = new Point(22, ClientSize.Height - 44);
+        _status.Size = new Size(ClientSize.Width - 496, 22);
         _status.Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
 
-        _save = UiFactory.Button("Kaydet (.txt)", 106, 32);
-        _save.Location = new Point(ClientSize.Width - 460, ClientSize.Height - 50);
+        _save = UiFactory.Button("Kaydet (.txt)", 108, 34);
+        _save.Location = new Point(ClientSize.Width - 468, ClientSize.Height - 52);
         _save.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
         _save.Click += (_, _) => SaveText();
 
-        _copyOnly = UiFactory.Button("Kopyala", 96, 32);
-        _copyOnly.Location = new Point(ClientSize.Width - 346, ClientSize.Height - 50);
+        _copyOnly = UiFactory.Button("Kopyala", 98, 34);
+        _copyOnly.Location = new Point(ClientSize.Width - 352, ClientSize.Height - 52);
         _copyOnly.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
         _copyOnly.Click += (_, _) => CopyOnly();
 
-        _copy = UiFactory.Button("Kopyala ve kapat", 132, 32, primary: true);
-        _copy.Location = new Point(ClientSize.Width - 242, ClientSize.Height - 50);
+        _copy = UiFactory.Button("Kopyala ve kapat", 136, 34, primary: true);
+        _copy.Location = new Point(ClientSize.Width - 246, ClientSize.Height - 52);
         _copy.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
         _copy.Click += (_, _) => CopyAndClose();
 
-        var close = UiFactory.Button("Kapat", 86, 32);
-        close.Location = new Point(ClientSize.Width - 102, ClientSize.Height - 50);
+        var close = UiFactory.Button("Kapat", 80, 34);
+        close.Location = new Point(ClientSize.Width - 102, ClientSize.Height - 52);
         close.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
         close.Click += (_, _) => Close();
 
         Controls.AddRange(new Control[]
         {
-            title, languageLabel, _language, _rescan, _showImage, _preview, _text,
+            title, subtitle, languageLabel, _language, _rescan, _showImage, _preview, _text,
             _keepLines, _autoCopy, _status, _save, _copyOnly, _copy, close,
         });
 
@@ -136,18 +144,28 @@ public sealed class OcrForm : Form
         FormClosed += (_, _) => _image.Dispose();
     }
 
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        base.OnPaint(e);
+        var g = e.Graphics;
+        Theme.Prepare(g);
+
+        // Üst başlık ayırıcı çizgisi ve alt eylem çubuğu ayırıcı çizgisi
+        using var divider = new Pen(Theme.DividerLine, 1f);
+        g.DrawLine(divider, 22, 64, ClientSize.Width - 22, 64);
+        g.DrawLine(divider, 22, ClientSize.Height - 96, ClientSize.Width - 22, ClientSize.Height - 96);
+    }
+
     public static void ShowFor(Bitmap image, Point origin, Settings settings, IWin32Window? owner = null)
     {
         var form = new OcrForm(image, settings);
 
-        // Tam ekran, en üstte yakalama kaplamasının arkasında kalmasın.
         if (owner is Form ownerForm && !ownerForm.IsDisposed)
         {
             form.Owner = ownerForm;
             form.StartPosition = FormStartPosition.CenterParent;
             form.FormClosed += (_, _) =>
             {
-                // Pencere kapanınca kaplama klavye odağını geri alsın (Shift+C tekrarı).
                 if (ownerForm.IsDisposed)
                 {
                     return;
@@ -165,7 +183,7 @@ public sealed class OcrForm : Form
                 }
                 catch (InvalidOperationException)
                 {
-                    // Sahip penceresi bu sırada kapanıyorsa yapılacak bir şey yok.
+                    // Sahip penceresi kapanıyorsa yoksay
                 }
             };
         }
@@ -227,12 +245,7 @@ public sealed class OcrForm : Form
 
     private async void Recognize(string languageTag)
     {
-        if (_busy)
-        {
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(languageTag))
+        if (_busy || string.IsNullOrWhiteSpace(languageTag))
         {
             return;
         }
@@ -251,7 +264,7 @@ public sealed class OcrForm : Form
             _lastLanguageTag = result.LanguageTag;
             _status.Text = result.Lines.Count == 0
                 ? "Metin bulunamadı. Daha büyük bir alan seçmeyi deneyin."
-                : $"{result.Lines.Count} satır · dil: {result.LanguageTag} · yerel motor, çevrimdışı";
+                : $"{result.Lines.Count} satır · dil: {result.LanguageTag}";
 
             _rawLines = result.Lines;
             ApplyLayout();
@@ -304,37 +317,43 @@ public sealed class OcrForm : Form
 
     private void PaintPreview(object? sender, PaintEventArgs e)
     {
-        if (!_showImage.Checked)
+        if (!_showImage.Checked || _image.Width <= 0 || _image.Height <= 0)
         {
             return;
         }
 
-        e.Graphics.Clear(Color.FromArgb(20, 20, 24));
+        var g = e.Graphics;
+        Theme.Prepare(g);
 
-        var available = new Rectangle(8, 8, _preview.Width - 16, _preview.Height - 16);
-        if (_image.Width <= 0 || _image.Height <= 0)
-        {
-            return;
-        }
-
+        var available = new Rectangle(12, 10, _preview.Width - 24, _preview.Height - 20);
         var scale = Math.Min(available.Width / (float)_image.Width, available.Height / (float)_image.Height);
         var width = Math.Max(1, (int)(_image.Width * scale));
         var height = Math.Max(1, (int)(_image.Height * scale));
         var x = available.Left + (available.Width - width) / 2;
         var y = available.Top + (available.Height - height) / 2;
 
-        e.Graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
-        e.Graphics.DrawImage(_image, new Rectangle(x, y, width, height));
-        using var pen = new Pen(Theme.ToolbarBorder);
-        e.Graphics.DrawRectangle(pen, x, y, width, height);
+        g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+        g.DrawImage(_image, new Rectangle(x, y, width, height));
+        using var pen = new Pen(Color.FromArgb(40, 255, 255, 255), 1f);
+        g.DrawRectangle(pen, x, y, width, height);
+
+        // Sağ altta boyut rozeti
+        var dimText = $"{_image.Width} × {_image.Height} px";
+        var dimSize = TextRenderer.MeasureText(g, dimText, Theme.SmallFont);
+        var badgeRect = new RectangleF(_preview.Width - dimSize.Width - 22, _preview.Height - dimSize.Height - 14, dimSize.Width + 12, dimSize.Height + 6);
+        Theme.FillRounded(g, badgeRect, 5f, Color.FromArgb(200, 24, 24, 30));
+        Theme.DrawRounded(g, badgeRect, 5f, Color.FromArgb(40, 255, 255, 255), 1f);
+        TextRenderer.DrawText(
+            g, dimText, Theme.SmallFont, Rectangle.Round(badgeRect), Theme.SubText,
+            TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
     }
 
     private void UpdatePreviewVisibility()
     {
         _preview.Visible = _showImage.Checked;
-        _text.Top = _showImage.Checked ? 242 : 90;
-        _text.Height = ClientSize.Height - _text.Top - 92;
-        _preview.Invalidate();
+        _text.Top = _showImage.Checked ? 258 : 84;
+        _text.Height = ClientSize.Height - _text.Top - 110;
+        Invalidate();
     }
 
     private void CopyOnly()

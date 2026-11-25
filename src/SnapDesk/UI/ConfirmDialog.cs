@@ -1,8 +1,7 @@
 namespace SnapDesk.UI;
 
 /// <summary>
-/// <summary>Kalıcı onay iletişim kutusu ("Bir daha sorma" seçeneğiyle).</summary>
-/// (Enter = onayla, Esc = vazgeç).
+/// Apple Obsidian Glass & Linear tasarım dilinde onay iletişim kutusu.
 /// </summary>
 public static class ConfirmDialog
 {
@@ -17,26 +16,26 @@ public static class ConfirmDialog
             StartPosition = FormStartPosition.CenterScreen,
             BackColor = Theme.ToolbarBack,
             ForeColor = Theme.Text,
-            ClientSize = new Size(430, 190),
+            ClientSize = new Size(440, 198),
             ShowInTaskbar = false,
             TopMost = true,
             KeyPreview = true,
         };
 
-        form.Paint += (_, e) =>
-        {
-            using var pen = new Pen(Theme.ToolbarBorder, 1f);
-            e.Graphics.DrawRectangle(pen, 0, 0, form.ClientSize.Width - 1, form.ClientSize.Height - 1);
-        };
+        UiFactory.ApplyRoundedRegion(form, 16);
+        UiFactory.AttachSmoothEntrance(form);
+
+        form.Resize += (_, _) => UiFactory.ApplyRoundedRegion(form, 16);
+        form.Paint += (_, e) => Theme.PaintObsidianSurface(e.Graphics, form.Width, form.Height, 16f);
 
         var titleLabel = new Label
         {
             Text = title,
-            Font = new Font("Segoe UI", 11f, FontStyle.Bold),
+            Font = Theme.TitleFont,
             ForeColor = Theme.Text,
             BackColor = Color.Transparent,
             AutoSize = false,
-            Bounds = new Rectangle(22, 20, 386, 28),
+            Bounds = new Rectangle(24, 22, 392, 28),
         };
 
         var messageLabel = new Label
@@ -46,20 +45,22 @@ public static class ConfirmDialog
             ForeColor = Theme.SubText,
             BackColor = Color.Transparent,
             AutoSize = false,
-            Bounds = new Rectangle(22, 52, 386, 24),
+            Bounds = new Rectangle(24, 54, 392, 26),
         };
 
         var check = UiFactory.Check(checkText);
-        check.ForeColor = Theme.SubText;
-        check.Location = new Point(22, 92);
+        check.BackColor = Theme.ToolbarBack;
+        check.Location = new Point(24, 94);
 
-        var no = UiFactory.Button("Vazgeç", 96, 34);
+        var no = UiFactory.Button("Vazgeç", 100, 34);
+        no.BackColor = Theme.ToolbarBack;
         no.DialogResult = DialogResult.Cancel;
-        no.Location = new Point(214, 136);
+        no.Location = new Point(208, 142);
 
-        var yes = UiFactory.Button("Evet", 96, 34, primary: true);
+        var yes = UiFactory.Button("Evet", 100, 34, primary: true);
+        yes.BackColor = Theme.ToolbarBack;
         yes.DialogResult = DialogResult.OK;
-        yes.Location = new Point(318, 136);
+        yes.Location = new Point(316, 142);
 
         form.Controls.AddRange(new Control[] { titleLabel, messageLabel, check, no, yes });
         form.AcceptButton = yes;

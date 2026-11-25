@@ -10,6 +10,8 @@ Windows için ekran görüntüsü alma, çizim ve düzenleme, ekrana sabitleme (
 
 SnapDesk tamamen çevrimdışı çalışır; telemetri, hesap zorunluluğu veya arka planda ağ bağlantısı içermez. .NET 10 ve C# ile Windows masaüstü ortamı için geliştirilmiştir.
 
+[**Windows için İndir (x64)**](https://github.com/ardayesilgul/snapdesk/releases/latest/download/SnapDesk.exe) · [Tüm Sürümler](https://github.com/ardayesilgul/snapdesk/releases)
+
 ![SnapDesk Arayüzü](assets/showcase.jpg)
 
 ## Özellikler

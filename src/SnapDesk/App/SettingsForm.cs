@@ -1,3 +1,4 @@
+using System.Drawing.Drawing2D;
 using System.Runtime.InteropServices;
 using SnapDesk.Core;
 using SnapDesk.Ocr;
@@ -5,12 +6,15 @@ using SnapDesk.UI;
 
 namespace SnapDesk;
 
-/// <summary>Ayarlar penceresi. Her alan gerçekten kaydedilir ve uygulanır.</summary>
+/// <summary>
+/// Ayarlar penceresi (Apple System Settings & Linear kart hiyerarşisi).
+/// </summary>
 public sealed class SettingsForm : Form
 {
-    private const int LabelX = 24;
-    private const int InputX = 180;
-    private const int ContentRight = 576;
+    private const int CardLeft = 20;
+    private const int CardRight = 592;
+    private const int LabelX = 36;
+    private const int InputX = 196;
 
     private readonly SnapDeskApplication _app;
     private readonly Settings _settings;
@@ -21,10 +25,10 @@ public sealed class SettingsForm : Form
     private readonly TextBox _folder;
     private readonly ComboBox _format;
     private readonly TextBox _pattern;
-    private readonly NumericUpDown _stroke;
-    private readonly NumericUpDown _fontSize;
-    private readonly NumericUpDown _block;
-    private readonly NumericUpDown _fps;
+    private readonly LinearStepper _stroke;
+    private readonly LinearStepper _fontSize;
+    private readonly LinearStepper _block;
+    private readonly LinearStepper _fps;
     private readonly ComboBox _ocrLanguage;
     private readonly CheckBox _magnifier;
     private readonly CheckBox _confirmEscape;
@@ -38,11 +42,12 @@ public sealed class SettingsForm : Form
     private readonly CheckBox _barRecord;
     private readonly CheckBox _barOcr;
     private readonly CheckBox _barPin;
-    private readonly Panel _colorSwatch;
+    private readonly ColorSwatchPill _colorSwatch;
     private readonly Label _hotkeyStatus;
-    private readonly Panel _content;
+    private readonly ScrollCardPanel _content;
     private readonly Panel _bottom;
     private readonly Label _ocrInfo;
+    private readonly List<(int Top, int Bottom)> _cardGroups = new();
     private Color _color;
 
     public SettingsForm(SnapDeskApplication app)
@@ -52,10 +57,11 @@ public sealed class SettingsForm : Form
         _color = Color.FromArgb(_settings.DefaultColorArgb);
 
         UiFactory.StyleForm(this);
+        UiFactory.AttachSmoothEntrance(this);
         Text = "SnapDesk — Ayarlar";
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(620, 740);
-        MinimumSize = new Size(620, 740);
+        ClientSize = new Size(632, 750);
+        MinimumSize = new Size(632, 640);
         MaximizeBox = false;
         FormBorderStyle = FormBorderStyle.FixedSingle;
 
@@ -64,40 +70,42 @@ public sealed class SettingsForm : Form
             Dock = DockStyle.Fill,
             ColumnCount = 1,
             RowCount = 2,
-            BackColor = Theme.ToolbarBack,
+            BackColor = Theme.WindowBack,
             Margin = Padding.Empty,
             Padding = Padding.Empty,
         };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 58f));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 62f));
         Controls.Add(layout);
 
         _bottom = new Panel
         {
             Dock = DockStyle.Fill,
-            BackColor = Color.FromArgb(24, 24, 28),
+            BackColor = Theme.ToolbarBack,
             Margin = Padding.Empty,
         };
         _bottom.Paint += (_, e) =>
         {
-            using var pen = new Pen(Theme.ToolbarBorder, 1f);
+            using var pen = new Pen(Theme.DividerLine, 1f);
             e.Graphics.DrawLine(pen, 0, 0, _bottom.Width, 0);
         };
         layout.Controls.Add(_bottom, 0, 1);
 
-        _content = new Panel
+        _content = new ScrollCardPanel(_cardGroups, CardLeft, CardRight)
         {
             Dock = DockStyle.Fill,
             AutoScroll = true,
-            BackColor = Theme.ToolbarBack,
+            BackColor = Theme.WindowBack,
             Margin = Padding.Empty,
         };
         layout.Controls.Add(_content, 0, 0);
 
-        var y = 16;
+        var y = 18;
 
-        AddHeader("Kısayollar", ref y);
+        // 1) Kısayollar Kartı
+        AddSectionHeader("Kısayollar", ref y);
+        var cardStart = BeginCard(ref y);
 
         _capture = AddHotkeyRow("Ekran yakalama", _settings.CaptureHotkey, Settings.DefaultCaptureHotkey, ref y);
         _pin = AddHotkeyRow("Sabitleme", _settings.PinHotkey, Settings.DefaultPinHotkey, ref y);
@@ -107,24 +115,28 @@ public sealed class SettingsForm : Form
         y += 2;
         _hotkeyStatus = UiFactory.Label(string.Empty, small: true);
         _hotkeyStatus.Location = new Point(LabelX, y);
-        _hotkeyStatus.MaximumSize = new Size(ContentRight - LabelX, 36);
+        _hotkeyStatus.MaximumSize = new Size(CardRight - LabelX - 16, 32);
         _content.Controls.Add(_hotkeyStatus);
-        y += 28;
+        y += 22;
+        EndCard(cardStart, ref y);
 
-        AddHeader("Kayıt", ref y);
+        // 2) Kayıt Kartı
+        AddSectionHeader("Kayıt ve Dosya", ref y);
+        cardStart = BeginCard(ref y);
 
         var folderLabel = UiFactory.Label("Klasör");
         folderLabel.Location = new Point(LabelX, y + 4);
         _content.Controls.Add(folderLabel);
 
         _folder = UiFactory.TextBox();
-        _folder.Location = new Point(InputX, y);
-        _folder.Width = 304;
+        _folder.Location = new Point(InputX + 6, y + 4);
+        _folder.Width = 282;
         _folder.Text = _settings.SaveFolder;
         _content.Controls.Add(_folder);
 
-        var browse = UiFactory.Button("Gözat", 84, 26);
-        browse.Location = new Point(InputX + 312, y - 1);
+        var browse = UiFactory.Button("Gözat", 78, 28);
+        browse.BackColor = Theme.SurfaceCard;
+        browse.Location = new Point(InputX + 302, y - 1);
         browse.Click += (_, _) => BrowseFolder();
         _content.Controls.Add(browse);
         y += 38;
@@ -132,137 +144,108 @@ public sealed class SettingsForm : Form
         _format = AddComboRow("Biçim", new[] { "png", "jpg" }, _settings.ImageFormat, ref y);
         _pattern = AddTextRow("Dosya adı", _settings.FileNamePattern, ref y);
 
-        y += 2;
         var hint = UiFactory.Label("{yyyy}-{MM}-{dd} gibi tarih kalıpları kullanılabilir. Uzantı otomatik eklenir.", small: true);
+        hint.ForeColor = Theme.MutedText;
         hint.Location = new Point(InputX, y);
         _content.Controls.Add(hint);
-        y += 28;
+        y += 22;
+        EndCard(cardStart, ref y);
 
-        AddHeader("Varsayılanlar", ref y);
+        // 3) Varsayılanlar Kartı
+        AddSectionHeader("Çizim ve Kayıt Varsayılanları", ref y);
+        cardStart = BeginCard(ref y);
 
-        var colorLabel = UiFactory.Label("Renk");
-        colorLabel.Location = new Point(LabelX, y + 4);
+        var colorLabel = UiFactory.Label("Varsayılan renk");
+        colorLabel.Location = new Point(LabelX, y + 5);
         _content.Controls.Add(colorLabel);
 
-        _colorSwatch = new Panel
+        _colorSwatch = new ColorSwatchPill(_color)
         {
             Location = new Point(InputX, y),
-            Size = new Size(52, 26),
-            BackColor = _color,
-            BorderStyle = BorderStyle.FixedSingle,
-            Cursor = Cursors.Hand,
+            Size = new Size(64, 28),
         };
         _colorSwatch.Click += (_, _) => PickColor();
         _content.Controls.Add(_colorSwatch);
 
-        var colorHint = UiFactory.Label("tıkla → renk seç", small: true);
-        colorHint.Location = new Point(InputX + 62, y + 4);
+        var colorHint = UiFactory.Label("Değiştirmek için tıklayın", small: true);
+        colorHint.ForeColor = Theme.MutedText;
+        colorHint.Location = new Point(InputX + 74, y + 6);
         _content.Controls.Add(colorHint);
         y += 38;
 
-        _stroke = AddNumberRow("Çizgi kalınlığı", 1, 60, _settings.DefaultStrokeWidth, ref y);
-        _fontSize = AddNumberRow("Metin boyutu", 8, 200, _settings.DefaultFontSize, ref y);
-        _block = AddNumberRow("Mozaik bloğu", 2, 80, _settings.MosaicBlockSize, ref y);
-        _fps = AddNumberRow("Kayıt FPS", 5, 60, _settings.RecordingFps, ref y);
+        _stroke = AddStepperRow("Çizgi kalınlığı", 1, 60, _settings.DefaultStrokeWidth, "px", ref y);
+        _fontSize = AddStepperRow("Metin boyutu", 8, 200, _settings.DefaultFontSize, "pt", ref y);
+        _block = AddStepperRow("Mozaik bloğu", 2, 80, _settings.MosaicBlockSize, "px", ref y);
+        _fps = AddStepperRow("Kayıt kare hızı", 5, 60, _settings.RecordingFps, "FPS", ref y);
+        EndCard(cardStart, ref y);
 
-        AddHeader("Metin tanıma", ref y);
+        // 4) Metin Tanıma (OCR) Kartı
+        AddSectionHeader("Metin Tanıma (OCR)", ref y);
+        cardStart = BeginCard(ref y);
 
         _ocrLanguage = UiFactory.Combo();
         _ocrLanguage.Location = new Point(InputX, y);
-        _ocrLanguage.Width = 260;
+        _ocrLanguage.Width = 264;
         _ocrLanguage.Items.Add(new LanguageItem(string.Empty, "Otomatik (Türkçe varsa)"));
         _ocrLanguage.SelectedIndex = 0;
 
-        var ocrLabel = UiFactory.Label("Dil");
+        var ocrLabel = UiFactory.Label("Tanıma dili");
         ocrLabel.Location = new Point(LabelX, y + 4);
         _content.Controls.Add(ocrLabel);
         _content.Controls.Add(_ocrLanguage);
-        y += 30;
+        y += 32;
 
         _ocrInfo = UiFactory.Label("Yerel Windows OCR motoru · çevrimdışı", small: true);
+        _ocrInfo.ForeColor = Theme.MutedText;
         _ocrInfo.Location = new Point(InputX, y);
         _content.Controls.Add(_ocrInfo);
-        y += 28;
+        y += 22;
+        EndCard(cardStart, ref y);
 
-        AddHeader("Davranış", ref y);
+        // 5) Davranış Kartı
+        AddSectionHeader("Davranış", ref y);
+        cardStart = BeginCard(ref y);
 
-        _magnifier = UiFactory.Check("Büyüteci göster", _settings.ShowMagnifier);
-        _magnifier.Location = new Point(LabelX, y);
-        _content.Controls.Add(_magnifier);
-        y += 28;
+        _magnifier = AddCheckRow("Yakalama sırasında piksel büyütecini göster", _settings.ShowMagnifier, ref y);
+        _confirmEscape = AddCheckRow("Çizim varken Esc ile çıkışta onay iste", _settings.ConfirmOnEscape, ref y);
+        _copyOnCapture = AddCheckRow("Bölge seçildiğinde otomatik olarak panoya kopyala", _settings.CopyToClipboardOnCapture, ref y);
+        _cursor = AddCheckRow("Video kaydında fare imlecini göster", _settings.RecordingIncludeCursor, ref y);
+        _autoCopyOcr = AddCheckRow("OCR sonucunu doğrudan panoya kopyala", _settings.AutoCopyOcrText, ref y);
+        EndCard(cardStart, ref y);
 
-        _confirmEscape = UiFactory.Check("Esc'de çıkış onayı iste", _settings.ConfirmOnEscape);
-        _confirmEscape.Location = new Point(LabelX, y);
-        _content.Controls.Add(_confirmEscape);
-        y += 28;
+        // 6) Araç Çubuğu (Dinamik Ada) Kartı
+        AddSectionHeader("Araç Çubuğu (Dinamik Ada)", ref y);
+        cardStart = BeginCard(ref y);
 
-        _copyOnCapture = UiFactory.Check("Bölge seçildiğinde otomatik olarak panoya kopyala", _settings.CopyToClipboardOnCapture);
-        _copyOnCapture.Location = new Point(LabelX, y);
-        _content.Controls.Add(_copyOnCapture);
-        y += 28;
+        _barSerial = AddCheckRow("Numaralandırma aracını göster (N)", _settings.ShowToolbarSerial, ref y);
+        _barUndoRedo = AddCheckRow("Geri al / İleri al düğmelerini göster (Ctrl+Z / Ctrl+Y)", _settings.ShowToolbarUndoRedo, ref y);
+        _barCrop = AddCheckRow("Seçime kırp düğmesini göster", _settings.ShowToolbarCrop, ref y);
+        _barLong = AddCheckRow("Uzun yakalama düğmesini göster (Ctrl+L)", _settings.ShowToolbarLongCapture, ref y);
+        _barRecord = AddCheckRow("Video / GIF kayıt düğmesini göster (Ctrl+G)", _settings.ShowToolbarRecord, ref y);
+        _barOcr = AddCheckRow("Metin tanıma (OCR) düğmesini göster (Shift+C)", _settings.ShowToolbarOcr, ref y);
+        _barPin = AddCheckRow("Ekrana sabitleme (Pin) düğmesini göster (Ctrl+T)", _settings.ShowToolbarPin, ref y);
 
-        _cursor = UiFactory.Check("Kayıtta fare imlecini göster", _settings.RecordingIncludeCursor);
-        _cursor.Location = new Point(LabelX, y);
-        _content.Controls.Add(_cursor);
-        y += 28;
-
-        _autoCopyOcr = UiFactory.Check("OCR sonucunu doğrudan panoya kopyala", _settings.AutoCopyOcrText);
-        _autoCopyOcr.Location = new Point(LabelX, y);
-        _content.Controls.Add(_autoCopyOcr);
-        y += 34;
-
-        AddHeader("Araç Çubuğu (Dinamik Ada)", ref y);
-
-        _barSerial = UiFactory.Check("Numaralandırma aracını göster (N)", _settings.ShowToolbarSerial);
-        _barSerial.Location = new Point(LabelX, y);
-        _content.Controls.Add(_barSerial);
-        y += 26;
-
-        _barUndoRedo = UiFactory.Check("Geri al / İleri al düğmelerini göster (Ctrl+Z / Ctrl+Y)", _settings.ShowToolbarUndoRedo);
-        _barUndoRedo.Location = new Point(LabelX, y);
-        _content.Controls.Add(_barUndoRedo);
-        y += 26;
-
-        _barCrop = UiFactory.Check("Seçime kırp düğmesini göster", _settings.ShowToolbarCrop);
-        _barCrop.Location = new Point(LabelX, y);
-        _content.Controls.Add(_barCrop);
-        y += 26;
-
-        _barLong = UiFactory.Check("Uzun yakalama düğmesini göster (Ctrl+L)", _settings.ShowToolbarLongCapture);
-        _barLong.Location = new Point(LabelX, y);
-        _content.Controls.Add(_barLong);
-        y += 26;
-
-        _barRecord = UiFactory.Check("Video / GIF kayıt düğmesini göster (Ctrl+G)", _settings.ShowToolbarRecord);
-        _barRecord.Location = new Point(LabelX, y);
-        _content.Controls.Add(_barRecord);
-        y += 26;
-
-        _barOcr = UiFactory.Check("Metin tanıma (OCR) düğmesini göster (Shift+C)", _settings.ShowToolbarOcr);
-        _barOcr.Location = new Point(LabelX, y);
-        _content.Controls.Add(_barOcr);
-        y += 26;
-
-        _barPin = UiFactory.Check("Ekrana sabitleme (Pin) düğmesini göster (Ctrl+T)", _settings.ShowToolbarPin);
-        _barPin.Location = new Point(LabelX, y);
-        _content.Controls.Add(_barPin);
-        y += 26;
-
+        y += 4;
         var barHint = UiFactory.Label("Gizlenen özelliklere '...' (Daha fazla) menüsünden veya kısayollarla erişebilirsiniz.", small: true);
+        barHint.ForeColor = Theme.MutedText;
         barHint.Location = new Point(LabelX, y);
         _content.Controls.Add(barHint);
-        y += 34;
+        y += 22;
+        EndCard(cardStart, ref y);
 
-        var resetAll = UiFactory.Button("Varsayılanlara sıfırla", 152, 32);
-        resetAll.Location = new Point(20, 13);
+        var resetAll = UiFactory.Button("Varsayılanlara sıfırla", 156, 34);
+        resetAll.BackColor = Theme.ToolbarBack;
+        resetAll.Location = new Point(20, 14);
         resetAll.Click += (_, _) => ResetAllToDefaults();
 
-        var save = UiFactory.Button("Kaydet", 110, 32, primary: true);
-        save.Location = new Point(10, 13);
+        var save = UiFactory.Button("Kaydet", 112, 34, primary: true);
+        save.BackColor = Theme.ToolbarBack;
+        save.Location = new Point(10, 14);
         save.Click += (_, _) => SaveSettings();
 
-        var cancel = UiFactory.Button("İptal", 110, 32);
-        cancel.Location = new Point(130, 13);
+        var cancel = UiFactory.Button("İptal", 104, 34);
+        cancel.BackColor = Theme.ToolbarBack;
+        cancel.Location = new Point(130, 14);
         cancel.Click += (_, _) => Close();
 
         _bottom.Controls.Add(resetAll);
@@ -271,9 +254,9 @@ public sealed class SettingsForm : Form
 
         void LayoutButtons()
         {
-            var left = Math.Max(180, _bottom.ClientSize.Width - 248);
+            var left = Math.Max(190, _bottom.ClientSize.Width - 244);
             save.Left = left;
-            cancel.Left = left + 118;
+            cancel.Left = left + 120;
         }
 
         _bottom.Resize += (_, _) => LayoutButtons();
@@ -282,10 +265,44 @@ public sealed class SettingsForm : Form
         AcceptButton = save;
         CancelButton = cancel;
 
-        _content.AutoScrollMinSize = new Size(0, y + 8);
+        _content.AutoScrollMinSize = new Size(0, y + 16);
         Shown += async (_, _) => await LoadOcrLanguagesAsync();
 
         ShowHotkeyStatus(_app.HotkeyResults.Where(r => !r.Success).ToList());
+    }
+
+    private void AddSectionHeader(string text, ref int y)
+    {
+        var label = UiFactory.Label(text);
+        label.Font = Theme.SectionFont;
+        label.ForeColor = Theme.SubText;
+        label.Location = new Point(CardLeft + 4, y);
+        _content.Controls.Add(label);
+        y += 24;
+    }
+
+    private static int BeginCard(ref int y)
+    {
+        var top = y;
+        y += 14;
+        return top;
+    }
+
+    private void EndCard(int top, ref int y)
+    {
+        y += 8;
+        _cardGroups.Add((top, y));
+        y += 16;
+    }
+
+    private CheckBox AddCheckRow(string text, bool isChecked, ref int y)
+    {
+        var check = UiFactory.Check(text, isChecked);
+        check.BackColor = Theme.SurfaceCard;
+        check.Location = new Point(LabelX, y);
+        _content.Controls.Add(check);
+        y += 30;
+        return check;
     }
 
     private async Task LoadOcrLanguagesAsync()
@@ -335,44 +352,27 @@ public sealed class SettingsForm : Form
             : "Yerel Windows OCR motoru · çevrimdışı";
     }
 
-    private void AddHeader(string text, ref int y)
-    {
-        var label = UiFactory.Label(text);
-        label.Font = new Font("Segoe UI", 10.5f, FontStyle.Bold);
-        label.Location = new Point(20, y);
-        _content.Controls.Add(label);
-        y += 28;
-
-        var line = new Panel
-        {
-            Location = new Point(20, y - 5),
-            Size = new Size(ContentRight - 20, 1),
-            BackColor = Theme.ToolbarBorder,
-        };
-        _content.Controls.Add(line);
-        y += 10;
-    }
-
     private HotkeyBox AddHotkeyRow(string label, string value, string defaultValue, ref int y)
     {
         var text = UiFactory.Label(label);
-        text.Location = new Point(LabelX, y + 4);
+        text.Location = new Point(LabelX, y + 5);
         _content.Controls.Add(text);
 
         var box = new HotkeyBox
         {
             Location = new Point(InputX, y),
-            Width = 180,
-            Text = value,
+            Size = new Size(184, 28),
+            Value = value,
         };
         _content.Controls.Add(box);
 
-        var reset = UiFactory.Button("Sıfırla", 74, 25);
-        reset.Location = new Point(InputX + 188, y - 1);
-        reset.Click += (_, _) => box.Text = defaultValue;
+        var reset = UiFactory.Button("Sıfırla", 74, 28);
+        reset.BackColor = Theme.SurfaceCard;
+        reset.Location = new Point(InputX + 192, y);
+        reset.Click += (_, _) => box.Value = defaultValue;
         _content.Controls.Add(reset);
 
-        y += 34;
+        y += 36;
         return box;
     }
 
@@ -384,12 +384,12 @@ public sealed class SettingsForm : Form
 
         var combo = UiFactory.Combo();
         combo.Location = new Point(InputX, y);
-        combo.Width = 180;
+        combo.Width = 184;
         combo.Items.AddRange(values);
         combo.SelectedItem = values.Contains(current) ? current : values[0];
         _content.Controls.Add(combo);
 
-        y += 34;
+        y += 36;
         return combo;
     }
 
@@ -400,8 +400,8 @@ public sealed class SettingsForm : Form
         _content.Controls.Add(text);
 
         var box = UiFactory.TextBox();
-        box.Location = new Point(InputX, y);
-        box.Width = 304;
+        box.Location = new Point(InputX + 6, y + 4);
+        box.Width = 282;
         box.Text = value;
         _content.Controls.Add(box);
 
@@ -409,28 +409,21 @@ public sealed class SettingsForm : Form
         return box;
     }
 
-    private NumericUpDown AddNumberRow(string label, int min, int max, int value, ref int y)
+    private LinearStepper AddStepperRow(string label, int min, int max, int value, string unit, ref int y)
     {
         var text = UiFactory.Label(label);
-        text.Location = new Point(LabelX, y + 4);
+        text.Location = new Point(LabelX, y + 5);
         _content.Controls.Add(text);
 
-        var numeric = new NumericUpDown
+        var stepper = new LinearStepper(min, max, value, unit)
         {
             Location = new Point(InputX, y),
-            Width = 96,
-            Minimum = min,
-            Maximum = max,
-            Value = Math.Clamp(value, min, max),
-            BackColor = Theme.ToolbarBackAlt,
-            ForeColor = Theme.Text,
-            BorderStyle = BorderStyle.FixedSingle,
-            Font = Theme.UiFont,
+            Size = new Size(132, 28),
         };
-        _content.Controls.Add(numeric);
+        _content.Controls.Add(stepper);
 
-        y += 34;
-        return numeric;
+        y += 36;
+        return stepper;
     }
 
     private void ResetAllToDefaults()
@@ -438,15 +431,15 @@ public sealed class SettingsForm : Form
         var defaults = new Settings();
         defaults.Normalize();
 
-        _capture.Text = Settings.DefaultCaptureHotkey;
-        _pin.Text = Settings.DefaultPinHotkey;
-        _long.Text = Settings.DefaultLongHotkey;
-        _record.Text = Settings.DefaultRecordHotkey;
+        _capture.Value = Settings.DefaultCaptureHotkey;
+        _pin.Value = Settings.DefaultPinHotkey;
+        _long.Value = Settings.DefaultLongHotkey;
+        _record.Value = Settings.DefaultRecordHotkey;
         _folder.Text = defaults.SaveFolder;
         _format.SelectedItem = defaults.ImageFormat;
         _pattern.Text = defaults.FileNamePattern;
         _color = Color.FromArgb(defaults.DefaultColorArgb);
-        _colorSwatch.BackColor = _color;
+        _colorSwatch.Color = _color;
         _stroke.Value = defaults.DefaultStrokeWidth;
         _fontSize.Value = defaults.DefaultFontSize;
         _block.Value = defaults.MosaicBlockSize;
@@ -472,7 +465,7 @@ public sealed class SettingsForm : Form
         if (dialog.ShowDialog(this) == DialogResult.OK)
         {
             _color = dialog.Color;
-            _colorSwatch.BackColor = _color;
+            _colorSwatch.Color = _color;
         }
     }
 
@@ -493,7 +486,7 @@ public sealed class SettingsForm : Form
 
     private void SaveSettings()
     {
-        var shortcuts = new[] { _capture.Text, _pin.Text, _long.Text, _record.Text };
+        var shortcuts = new[] { _capture.Value, _pin.Value, _long.Value, _record.Value };
         foreach (var shortcut in shortcuts)
         {
             if (string.IsNullOrWhiteSpace(shortcut)) continue;
@@ -525,14 +518,14 @@ public sealed class SettingsForm : Form
         {
             MessageBox.Show(this,
                 "Aynı kısayol birden fazla eyleme atanamaz. Lütfen kombinasyonlardan birini değiştirin.",
-                "SnapDesk - Kısayol çakışması", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                "SnapDesk — Kısayol çakışması", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
 
-        _settings.CaptureHotkey = string.IsNullOrWhiteSpace(_capture.Text) ? Settings.DefaultCaptureHotkey : _capture.Text;
-        _settings.PinHotkey = string.IsNullOrWhiteSpace(_pin.Text) ? Settings.DefaultPinHotkey : _pin.Text;
-        _settings.LongCaptureHotkey = string.IsNullOrWhiteSpace(_long.Text) ? Settings.DefaultLongHotkey : _long.Text;
-        _settings.RecordHotkey = string.IsNullOrWhiteSpace(_record.Text) ? Settings.DefaultRecordHotkey : _record.Text;
+        _settings.CaptureHotkey = string.IsNullOrWhiteSpace(_capture.Value) ? Settings.DefaultCaptureHotkey : _capture.Value;
+        _settings.PinHotkey = string.IsNullOrWhiteSpace(_pin.Value) ? Settings.DefaultPinHotkey : _pin.Value;
+        _settings.LongCaptureHotkey = string.IsNullOrWhiteSpace(_long.Value) ? Settings.DefaultLongHotkey : _long.Value;
+        _settings.RecordHotkey = string.IsNullOrWhiteSpace(_record.Value) ? Settings.DefaultRecordHotkey : _record.Value;
 
         _settings.SaveFolder = _folder.Text;
         _settings.ImageFormat = _format.SelectedItem?.ToString() ?? "png";
@@ -540,10 +533,10 @@ public sealed class SettingsForm : Form
             ? "SnapDesk_{yyyy-MM-dd_HH-mm-ss}"
             : _pattern.Text;
         _settings.DefaultColorArgb = _color.ToArgb();
-        _settings.DefaultStrokeWidth = (int)_stroke.Value;
-        _settings.DefaultFontSize = (int)_fontSize.Value;
-        _settings.MosaicBlockSize = (int)_block.Value;
-        _settings.RecordingFps = (int)_fps.Value;
+        _settings.DefaultStrokeWidth = _stroke.Value;
+        _settings.DefaultFontSize = _fontSize.Value;
+        _settings.MosaicBlockSize = _block.Value;
+        _settings.RecordingFps = _fps.Value;
         _settings.OcrLanguage = (_ocrLanguage.SelectedItem as LanguageItem)?.Tag ?? string.Empty;
         _settings.ShowMagnifier = _magnifier.Checked;
         _settings.ConfirmOnEscape = _confirmEscape.Checked;
@@ -587,7 +580,7 @@ public sealed class SettingsForm : Form
         _hotkeyStatus.Text = failures.Count == 0
             ? "Tüm kısayollar kayıtlı."
             : "Kaydedilemeyen: " + string.Join(", ", failures.Select(f => f.Shortcut));
-        _hotkeyStatus.ForeColor = failures.Count == 0 ? Theme.SubText : Color.FromArgb(240, 140, 110);
+        _hotkeyStatus.ForeColor = failures.Count == 0 ? Theme.MutedText : Color.FromArgb(245, 130, 100);
     }
 
     public void ShowHotkeysSuspended()
@@ -598,7 +591,7 @@ public sealed class SettingsForm : Form
         }
 
         _hotkeyStatus.Text = "Ayarlar açıkken global kısayollar geçici olarak devre dışı.";
-        _hotkeyStatus.ForeColor = Theme.SubText;
+        _hotkeyStatus.ForeColor = Theme.MutedText;
     }
 
     private sealed record LanguageItem(string Tag, string Label)
@@ -606,17 +599,284 @@ public sealed class SettingsForm : Form
         public override string ToString() => Label;
     }
 
-    /// <summary>Tuş kombinasyonunu doğrudan yakalayan kutu.</summary>
-    private sealed class HotkeyBox : TextBox
+    // ----------------------------------------------------------------- ScrollCardPanel
+
+    private sealed class ScrollCardPanel : Panel
     {
+        private readonly List<(int Top, int Bottom)> _cards;
+        private readonly int _left;
+        private readonly int _right;
+
+        public ScrollCardPanel(List<(int Top, int Bottom)> cards, int left, int right)
+        {
+            _cards = cards;
+            _left = left;
+            _right = right;
+            SetStyle(
+                ControlStyles.AllPaintingInWmPaint |
+                ControlStyles.OptimizedDoubleBuffer |
+                ControlStyles.UserPaint |
+                ControlStyles.ResizeRedraw,
+                true);
+        }
+
+        protected override void OnScroll(ScrollEventArgs se)
+        {
+            base.OnScroll(se);
+            Invalidate();
+        }
+
+        protected override void OnMouseWheel(MouseEventArgs e)
+        {
+            base.OnMouseWheel(e);
+            Invalidate();
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            var g = e.Graphics;
+            Theme.Prepare(g);
+
+            var scrollY = AutoScrollPosition.Y;
+            var width = _right - _left;
+
+            foreach (var (top, bottom) in _cards)
+            {
+                var rect = new RectangleF(_left + 0.5f, top + scrollY + 0.5f, width - 1f, bottom - top - 1f);
+                if (rect.Bottom < 0 || rect.Top > Height) continue;
+
+                Theme.FillRounded(g, rect, 10f, Theme.SurfaceCard);
+                Theme.DrawRounded(g, rect, 10f, Theme.CardBorder, 1f);
+            }
+        }
+    }
+
+    // ----------------------------------------------------------------- LinearStepper
+
+    private sealed class LinearStepper : Control
+    {
+        private readonly int _min;
+        private readonly int _max;
+        private readonly string _unit;
+        private int _value;
+        private int _hoverZone; // 0 = none, -1 = minus, 1 = plus
+
+        public LinearStepper(int min, int max, int value, string unit)
+        {
+            _min = min;
+            _max = max;
+            _unit = unit;
+            _value = Math.Clamp(value, min, max);
+
+            SetStyle(
+                ControlStyles.AllPaintingInWmPaint |
+                ControlStyles.OptimizedDoubleBuffer |
+                ControlStyles.UserPaint |
+                ControlStyles.ResizeRedraw,
+                true);
+            BackColor = Theme.SurfaceCard;
+            Cursor = Cursors.Hand;
+        }
+
+        [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+        public int Value
+        {
+            get => _value;
+            set
+            {
+                _value = Math.Clamp(value, _min, _max);
+                Invalidate();
+            }
+        }
+
+        protected override void OnMouseMove(MouseEventArgs e)
+        {
+            base.OnMouseMove(e);
+            var zone = e.X < 32 ? -1 : e.X > Width - 32 ? 1 : 0;
+            if (zone != _hoverZone)
+            {
+                _hoverZone = zone;
+                Invalidate();
+            }
+        }
+
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            base.OnMouseLeave(e);
+            _hoverZone = 0;
+            Invalidate();
+        }
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            base.OnMouseDown(e);
+            if (e.Button != MouseButtons.Left) return;
+
+            var step = (ModifierKeys & Keys.Shift) != 0 ? 5 : 1;
+            if (e.X < 32)
+            {
+                Value -= step;
+            }
+            else if (e.X > Width - 32)
+            {
+                Value += step;
+            }
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            Theme.Prepare(g);
+            g.Clear(Theme.SurfaceCard);
+
+            var rect = new RectangleF(0.5f, 0.5f, Width - 1f, Height - 1f);
+            Theme.FillRounded(g, rect, 7f, Theme.SurfaceInput);
+            Theme.DrawRounded(g, rect, 7f, Theme.InputBorder, 1f);
+
+            if (_hoverZone == -1)
+            {
+                Theme.FillRounded(g, new RectangleF(1.5f, 1.5f, 29f, Height - 3f), 6f, Theme.Hover);
+            }
+            else if (_hoverZone == 1)
+            {
+                Theme.FillRounded(g, new RectangleF(Width - 30.5f, 1.5f, 29f, Height - 3f), 6f, Theme.Hover);
+            }
+
+            TextRenderer.DrawText(g, "−", Theme.UiFontBold, new Rectangle(0, 0, 32, Height),
+                _value > _min ? Theme.Text : Theme.Disabled,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+
+            TextRenderer.DrawText(g, $"{_value} {_unit}", Theme.UiFont, new Rectangle(32, 0, Width - 64, Height),
+                Theme.Text,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+
+            TextRenderer.DrawText(g, "+", Theme.UiFontBold, new Rectangle(Width - 32, 0, 32, Height),
+                _value < _max ? Theme.Text : Theme.Disabled,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+        }
+    }
+
+    // ----------------------------------------------------------------- ColorSwatchPill
+
+    private sealed class ColorSwatchPill : Control
+    {
+        private Color _color;
+        private bool _hovered;
+
+        public ColorSwatchPill(Color color)
+        {
+            _color = color;
+            SetStyle(
+                ControlStyles.AllPaintingInWmPaint |
+                ControlStyles.OptimizedDoubleBuffer |
+                ControlStyles.UserPaint |
+                ControlStyles.ResizeRedraw,
+                true);
+            BackColor = Theme.SurfaceCard;
+            Cursor = Cursors.Hand;
+        }
+
+        [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+        public Color Color
+        {
+            get => _color;
+            set
+            {
+                _color = value;
+                Invalidate();
+            }
+        }
+
+        protected override void OnMouseEnter(EventArgs e)
+        {
+            base.OnMouseEnter(e);
+            _hovered = true;
+            Invalidate();
+        }
+
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            base.OnMouseLeave(e);
+            _hovered = false;
+            Invalidate();
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            Theme.Prepare(g);
+            g.Clear(Theme.SurfaceCard);
+
+            var rect = new RectangleF(1f, 1f, Width - 2f, Height - 2f);
+            Theme.FillRounded(g, rect, 7f, _color);
+            Theme.DrawRounded(g, rect, 7f, _hovered ? Color.White : Color.FromArgb(90, 255, 255, 255), _hovered ? 1.5f : 1f);
+        }
+    }
+
+    // ----------------------------------------------------------------- HotkeyBox
+
+    private sealed class HotkeyBox : Control
+    {
+        private string _value = string.Empty;
+        private bool _hovered;
+
         public HotkeyBox()
         {
-            ReadOnly = true;
-            BackColor = Theme.ToolbarBackAlt;
-            ForeColor = Theme.Text;
-            BorderStyle = BorderStyle.FixedSingle;
-            Font = Theme.UiFont;
+            SetStyle(
+                ControlStyles.AllPaintingInWmPaint |
+                ControlStyles.OptimizedDoubleBuffer |
+                ControlStyles.UserPaint |
+                ControlStyles.ResizeRedraw |
+                ControlStyles.Selectable,
+                true);
+            BackColor = Theme.SurfaceCard;
+            Font = Theme.UiFontBold;
             Cursor = Cursors.Hand;
+            TabStop = true;
+        }
+
+        [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+        public string Value
+        {
+            get => _value;
+            set
+            {
+                _value = value;
+                Invalidate();
+            }
+        }
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            base.OnMouseDown(e);
+            Focus();
+        }
+
+        protected override void OnGotFocus(EventArgs e)
+        {
+            base.OnGotFocus(e);
+            Invalidate();
+        }
+
+        protected override void OnLostFocus(EventArgs e)
+        {
+            base.OnLostFocus(e);
+            Invalidate();
+        }
+
+        protected override void OnMouseEnter(EventArgs e)
+        {
+            base.OnMouseEnter(e);
+            _hovered = true;
+            Invalidate();
+        }
+
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            base.OnMouseLeave(e);
+            _hovered = false;
+            Invalidate();
         }
 
         protected override bool IsInputKey(Keys keyData) => true;
@@ -633,12 +893,13 @@ public sealed class SettingsForm : Form
 
             if (e.KeyCode is Keys.Back or Keys.Delete)
             {
-                Text = string.Empty;
+                Value = string.Empty;
                 return;
             }
 
             if (e.KeyCode == Keys.Escape)
             {
+                Parent?.Focus();
                 return;
             }
 
@@ -651,15 +912,42 @@ public sealed class SettingsForm : Form
                 (GetAsyncKeyState(0x5C) & 0x8000) != 0;
             if (winDown) parts.Add("Win");
 
-            var key = e.KeyCode;
-            parts.Add(key switch
-            {
-                >= Keys.D0 and <= Keys.D9 => ((char)('0' + (key - Keys.D0))).ToString(),
-                >= Keys.NumPad0 and <= Keys.NumPad9 => "Num" + (key - Keys.NumPad0),
-                _ => key.ToString(),
-            });
+            var keyName = e.KeyCode is >= Keys.D0 and <= Keys.D9
+                ? ((int)e.KeyCode - (int)Keys.D0).ToString()
+                : e.KeyCode.ToString();
+            parts.Add(keyName);
+            Value = string.Join("+", parts);
+        }
 
-            Text = string.Join("+", parts);
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            Theme.Prepare(g);
+            g.Clear(Theme.SurfaceCard);
+
+            var rect = new RectangleF(0.5f, 0.5f, Width - 1f, Height - 1f);
+            var fill = Focused
+                ? Color.FromArgb(24, Theme.AppleBlue)
+                : _hovered
+                    ? Theme.SurfaceHover
+                    : Theme.SurfaceInput;
+            var border = Focused
+                ? Theme.AppleBlue
+                : _hovered
+                    ? Color.FromArgb(80, 255, 255, 255)
+                    : Theme.InputBorder;
+
+            Theme.FillRounded(g, rect, 7f, fill);
+            Theme.DrawRounded(g, rect, 7f, border, Focused ? 1.4f : 1f);
+
+            var display = string.IsNullOrWhiteSpace(_value)
+                ? (Focused ? "Tuş kombinasyonu…" : "Atanmadı")
+                : _value;
+            var textColor = string.IsNullOrWhiteSpace(_value) ? Theme.MutedText : Theme.Text;
+
+            TextRenderer.DrawText(
+                g, display, Font, ClientRectangle, textColor,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
         }
 
         [DllImport("user32.dll")]
