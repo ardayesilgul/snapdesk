@@ -99,3 +99,7 @@ powershell -ExecutionPolicy Bypass -File scripts/publish.ps1
 ## Lisans
 
 Bu proje [MIT Lisansı](LICENSE) kapsamında açık kaynak olarak dağıtılmaktadır.
+
+---
+
+**Geliştirici:** [Arda Yeşilgül](https://github.com/ardayesilgul).

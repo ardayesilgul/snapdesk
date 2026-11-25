@@ -99,3 +99,7 @@ powershell -ExecutionPolicy Bypass -File scripts/publish.ps1
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
+
+---
+
+**Developer:** [Arda Yeşilgül](https://github.com/ardayesilgul).
