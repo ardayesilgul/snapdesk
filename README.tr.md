@@ -1,16 +1,18 @@
-<div align="right">
-
-[English](README.md) · **Türkçe**
-
+<div align="center">
+  <img src="assets/logo.png" width="96" height="96" alt="SnapDesk" />
+  <h1>SnapDesk</h1>
+  <p>
+    Windows için ekran görüntüsü alma, çizim ve düzenleme, ekrana sabitleme (pin) ve yerel metin tanıma (OCR) aracı.<br />
+    SnapDesk tamamen çevrimdışı çalışır; telemetri, hesap zorunluluğu veya arka planda ağ bağlantısı içermez. .NET 10 ve C# ile Windows masaüstü ortamı için geliştirilmiştir.
+  </p>
+  <p>
+    <a href="https://github.com/ardayesilgul/snapdesk/releases/latest/download/SnapDesk.exe"><strong>Windows için İndir (x64)</strong></a>
+    &nbsp;·&nbsp;
+    <a href="https://github.com/ardayesilgul/snapdesk/releases">Tüm Sürümler</a>
+    &nbsp;·&nbsp;
+    <a href="README.md">English</a> · <strong>Türkçe</strong>
+  </p>
 </div>
-
-<h1><img src="assets/logo.png" width="34" height="34" alt="" align="absmiddle" /> SnapDesk</h1>
-
-Windows için ekran görüntüsü alma, çizim ve düzenleme, ekrana sabitleme (pin) ve yerel metin tanıma (OCR) aracı.
-
-SnapDesk tamamen çevrimdışı çalışır; telemetri, hesap zorunluluğu veya arka planda ağ bağlantısı içermez. .NET 10 ve C# ile Windows masaüstü ortamı için geliştirilmiştir.
-
-[**Windows için İndir (x64)**](https://github.com/ardayesilgul/snapdesk/releases/latest/download/SnapDesk.exe) · [Tüm Sürümler](https://github.com/ardayesilgul/snapdesk/releases)
 
 ![SnapDesk Arayüzü](assets/showcase.jpg)
 

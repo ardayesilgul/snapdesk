@@ -1,16 +1,18 @@
-<div align="right">
-
-**English** · [Türkçe](README.tr.md)
-
+<div align="center">
+  <img src="assets/logo.png" width="96" height="96" alt="SnapDesk" />
+  <h1>SnapDesk</h1>
+  <p>
+    A lightweight Windows utility for screen capture, annotation, floating pins, and OCR.<br />
+    SnapDesk runs entirely offline with zero telemetry, accounts, or background network requests. Built with .NET 10 and C# for Windows.
+  </p>
+  <p>
+    <a href="https://github.com/ardayesilgul/snapdesk/releases/latest/download/SnapDesk.exe"><strong>Download for Windows (x64)</strong></a>
+    &nbsp;·&nbsp;
+    <a href="https://github.com/ardayesilgul/snapdesk/releases">All Releases</a>
+    &nbsp;·&nbsp;
+    <strong>English</strong> · <a href="README.tr.md">Türkçe</a>
+  </p>
 </div>
-
-<h1><img src="assets/logo.png" width="35" height="35" alt="" align="absmiddle" /> SnapDesk</h1>
-
-A lightweight Windows utility for screen capture, annotation, floating pins, and OCR.
-
-SnapDesk runs entirely offline with zero telemetry, accounts, or background network requests. Built with .NET 10 and C# for Windows.
-
-[**Download for Windows (x64)**](https://github.com/ardayesilgul/snapdesk/releases/latest/download/SnapDesk.exe) · [All Releases](https://github.com/ardayesilgul/snapdesk/releases)
 
 ![SnapDesk Interface](assets/showcase.jpg)
 
