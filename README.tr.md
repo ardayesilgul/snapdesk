@@ -6,11 +6,12 @@
     SnapDesk tamamen çevrimdışı çalışır; telemetri, hesap zorunluluğu veya arka planda ağ bağlantısı içermez. .NET 10 ve C# ile Windows masaüstü ortamı için geliştirilmiştir.
   </p>
   <p>
-    <a href="https://github.com/ardayesilgul/snapdesk/releases/latest/download/SnapDesk.exe"><strong>Windows için İndir (x64)</strong></a>
-    &nbsp;·&nbsp;
-    <a href="https://github.com/ardayesilgul/snapdesk/releases">Tüm Sürümler</a>
-    &nbsp;·&nbsp;
-    <a href="README.md">English</a> · <strong>Türkçe</strong>
+    <a href="https://github.com/ardayesilgul/snapdesk/releases/latest/download/SnapDesk.exe">
+      <img src="assets/download-tr.svg" width="276" height="44" alt="Windows için İndir (x64)" />
+    </a>
+  </p>
+  <p>
+    <sub>Tek dosya taşınabilir <code>.exe</code> · Windows 10/11 (x64) · <a href="https://github.com/ardayesilgul/snapdesk/releases">Tüm Sürümler</a> · <a href="README.md">English</a> · <strong>Türkçe</strong></sub>
   </p>
 </div>
 

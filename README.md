@@ -6,11 +6,12 @@
     SnapDesk runs entirely offline with zero telemetry, accounts, or background network requests. Built with .NET 10 and C# for Windows.
   </p>
   <p>
-    <a href="https://github.com/ardayesilgul/snapdesk/releases/latest/download/SnapDesk.exe"><strong>Download for Windows (x64)</strong></a>
-    &nbsp;·&nbsp;
-    <a href="https://github.com/ardayesilgul/snapdesk/releases">All Releases</a>
-    &nbsp;·&nbsp;
-    <strong>English</strong> · <a href="README.tr.md">Türkçe</a>
+    <a href="https://github.com/ardayesilgul/snapdesk/releases/latest/download/SnapDesk.exe">
+      <img src="assets/download-en.svg" width="276" height="44" alt="Download for Windows (x64)" />
+    </a>
+  </p>
+  <p>
+    <sub>Single portable <code>.exe</code> · Windows 10/11 (x64) · <a href="https://github.com/ardayesilgul/snapdesk/releases">All Releases</a> · <strong>English</strong> · <a href="README.tr.md">Türkçe</a></sub>
   </p>
 </div>
 
