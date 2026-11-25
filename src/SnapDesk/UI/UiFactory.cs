@@ -100,12 +100,34 @@ public static class UiFactory
         timer.Start();
     }
 
+    private static readonly Lazy<Icon?> CachedAppIcon = new(() =>
+    {
+        try
+        {
+            var exePath = Environment.ProcessPath;
+            if (!string.IsNullOrEmpty(exePath) && File.Exists(exePath))
+            {
+                return Icon.ExtractAssociatedIcon(exePath);
+            }
+        }
+        catch
+        {
+            // yoksay
+        }
+
+        return null;
+    });
+
     public static void StyleForm(Form form)
     {
         form.BackColor = Theme.WindowBack;
         form.ForeColor = Theme.Text;
         form.Font = Theme.UiFont;
         form.AutoScaleMode = AutoScaleMode.Dpi;
+        if (CachedAppIcon.Value is { } appIcon)
+        {
+            form.Icon = appIcon;
+        }
 
         if (form.IsHandleCreated)
         {
