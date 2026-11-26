@@ -1,18 +1,20 @@
 using System.Drawing.Drawing2D;
 using System.Drawing.Text;
-using System.Runtime.InteropServices;
 
 namespace SnapDesk.UI;
 
 /// <summary>
-/// Uygulama görsel teması, renk katmanları ve gömülü Geist tipografi hiyerarşisi (OLED Zinc + Apple).
+/// Uygulama görsel teması, OLED Zinc renk paleti ve Windows 11 Segoe UI Variable ClearType tipografisi.
 /// </summary>
 public static class Theme
 {
-    private static readonly PrivateFontCollection EmbeddedFonts = LoadEmbeddedFonts();
-    private static readonly FontFamily? GeistRegularFamily = FindFamily("Geist");
-    private static readonly FontFamily? GeistMediumFamily = FindFamily("Geist Medium");
-    private static readonly FontFamily? GeistSemiBoldFamily = FindFamily("Geist SemiBold");
+    private static readonly HashSet<string> InstalledFamilies = LoadInstalledFamilyNames();
+
+    private static readonly string TextFamily = PickFamily("Segoe UI Variable Text", "Segoe UI");
+    private static readonly string MediumFamily = PickFamily("Segoe UI Variable Display", "Segoe UI Variable Text", "Segoe UI");
+    private static readonly string SemiBoldFamily = PickFamily("Segoe UI Variable Text Semibold", "Segoe UI Semibold", "Segoe UI");
+    private static readonly string DisplaySemiBoldFamily = PickFamily("Segoe UI Variable Display Semib", "Segoe UI Variable Text Semibold", "Segoe UI Semibold", "Segoe UI");
+
     // Katmanlı OLED Zinc yüzey paleti (0 = Tuval, 1 = Sidebar, 2 = Kart, 3 = Girdi, 4 = Hover)
     public static readonly Color WindowBack = Color.FromArgb(8, 9, 10);
     public static readonly Color ToolbarBack = Color.FromArgb(13, 14, 17);
@@ -59,46 +61,32 @@ public static class Theme
 
     public static readonly Color[] Palette = { Red, Yellow, Green, Blue, Black, White };
 
-    public static Font Ui(float size = 9.2f, FontStyle style = FontStyle.Regular)
+    public static Font Ui(float size = 9.5f, FontStyle style = FontStyle.Regular)
     {
         if (style == FontStyle.Bold)
         {
-            if (GeistSemiBoldFamily is not null)
-            {
-                return new Font(GeistSemiBoldFamily, size, FontStyle.Regular, GraphicsUnit.Point);
-            }
-            if (GeistRegularFamily is not null)
-            {
-                return new Font(GeistRegularFamily, size, FontStyle.Bold, GraphicsUnit.Point);
-            }
-            return new Font("Segoe UI Variable Display Semib", size, FontStyle.Regular, GraphicsUnit.Point);
+            var fam = size >= 11f ? DisplaySemiBoldFamily : SemiBoldFamily;
+            return new Font(fam, size, FontStyle.Regular, GraphicsUnit.Point);
         }
 
-        if (GeistRegularFamily is not null)
-        {
-            return new Font(GeistRegularFamily, size, style, GraphicsUnit.Point);
-        }
-
-        return new Font("Segoe UI Variable Text", size, style, GraphicsUnit.Point);
+        return new Font(TextFamily, size, style, GraphicsUnit.Point);
     }
 
-    public static Font Medium(float size = 9.2f)
-        => GeistMediumFamily is not null
-            ? new Font(GeistMediumFamily, size, FontStyle.Regular, GraphicsUnit.Point)
-            : Ui(size);
+    public static Font Medium(float size = 9.5f)
+        => new(MediumFamily, size, FontStyle.Regular, GraphicsUnit.Point);
 
-    public static readonly Font TitleFont = Ui(14f, FontStyle.Bold);
+    public static readonly Font TitleFont = Ui(14.5f, FontStyle.Bold);
     public static readonly Font SectionFont = Ui(9.5f, FontStyle.Bold);
-    public static readonly Font UiFont = Ui(9.2f);
-    public static readonly Font UiFontMedium = Medium(9.2f);
-    public static readonly Font UiFontBold = Ui(9.2f, FontStyle.Bold);
-    public static readonly Font SmallFont = Ui(8.4f);
+    public static readonly Font UiFont = Ui(9.5f);
+    public static readonly Font UiFontMedium = Medium(9.5f);
+    public static readonly Font UiFontBold = Ui(9.5f, FontStyle.Bold);
+    public static readonly Font SmallFont = Ui(8.5f);
     public static readonly Font MonoFont = new("Consolas", 10f, FontStyle.Bold, GraphicsUnit.Point);
 
     public static void Prepare(Graphics g)
     {
         g.SmoothingMode = SmoothingMode.AntiAlias;
-        g.TextRenderingHint = TextRenderingHint.AntiAlias;
+        g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
         g.PixelOffsetMode = PixelOffsetMode.HighQuality;
     }
 
@@ -117,15 +105,25 @@ public static class Theme
             return;
         }
 
-        g.TextRenderingHint = TextRenderingHint.AntiAlias;
-        using var format = new StringFormat(StringFormatFlags.NoWrap)
+        var flags = TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine;
+        flags |= horizontal switch
         {
-            Alignment = horizontal,
-            LineAlignment = vertical,
-            Trimming = ellipsis ? StringTrimming.EllipsisCharacter : StringTrimming.None,
+            StringAlignment.Center => TextFormatFlags.HorizontalCenter,
+            StringAlignment.Far => TextFormatFlags.Right,
+            _ => TextFormatFlags.Left,
         };
-        using var brush = new SolidBrush(color);
-        g.DrawString(text, font, brush, bounds, format);
+        flags |= vertical switch
+        {
+            StringAlignment.Center => TextFormatFlags.VerticalCenter,
+            StringAlignment.Far => TextFormatFlags.Bottom,
+            _ => TextFormatFlags.Top,
+        };
+        if (ellipsis)
+        {
+            flags |= TextFormatFlags.EndEllipsis;
+        }
+
+        TextRenderer.DrawText(g, text, font, Rectangle.Round(bounds), color, flags);
     }
 
     public static float MeasureTextWidth(Graphics g, string text, Font font)
@@ -135,62 +133,30 @@ public static class Theme
             return 0f;
         }
 
-        using var format = StringFormat.GenericTypographic;
-        return g.MeasureString(text, font, 2000, format).Width;
+        return TextRenderer.MeasureText(
+            g, text, font, new Size(2000, 200),
+            TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine | TextFormatFlags.NoPadding).Width;
     }
 
-    private static FontFamily? FindFamily(string name)
-        => EmbeddedFonts.Families.FirstOrDefault(f => f.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
-
-    private static PrivateFontCollection LoadEmbeddedFonts()
+    private static HashSet<string> LoadInstalledFamilyNames()
     {
-        var collection = new PrivateFontCollection();
-        var assembly = typeof(Theme).Assembly;
-        var names = assembly.GetManifestResourceNames()
-            .Where(n => n.EndsWith(".ttf", StringComparison.OrdinalIgnoreCase))
-            .OrderBy(n => n, StringComparer.OrdinalIgnoreCase);
+        using var installed = new InstalledFontCollection();
+        return installed.Families
+            .Select(f => f.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+    }
 
-        foreach (var resourceName in names)
+    private static string PickFamily(params string[] candidates)
+    {
+        foreach (var candidate in candidates)
         {
-            try
+            if (InstalledFamilies.Contains(candidate))
             {
-                using var stream = assembly.GetManifestResourceStream(resourceName);
-                if (stream is null) continue;
-                var data = new byte[stream.Length];
-                stream.ReadExactly(data);
-
-                var handle = GCHandle.Alloc(data, GCHandleType.Pinned);
-                try
-                {
-                    var ptr = handle.AddrOfPinnedObject();
-                    collection.AddMemoryFont(ptr, data.Length);
-                    _ = AddFontMemResourceEx(ptr, (uint)data.Length, IntPtr.Zero, out _);
-                }
-                finally
-                {
-                    handle.Free();
-                }
-            }
-            catch
-            {
-                // Font yüklenemezse sistem fontuna düş.
+                return candidate;
             }
         }
 
-        return collection;
-    }
-
-    [DllImport("gdi32.dll")]
-    private static extern IntPtr AddFontMemResourceEx(IntPtr pbFont, uint cbFont, IntPtr pdv, out uint pcFonts);
-
-    public static Color Lerp(Color from, Color to, float t)
-    {
-        t = Math.Clamp(t, 0f, 1f);
-        return Color.FromArgb(
-            (int)Math.Round(from.A + (to.A - from.A) * t),
-            (int)Math.Round(from.R + (to.R - from.R) * t),
-            (int)Math.Round(from.G + (to.G - from.G) * t),
-            (int)Math.Round(from.B + (to.B - from.B) * t));
+        return "Segoe UI";
     }
 
     public static GraphicsPath RoundedRect(RectangleF rect, float radius)
@@ -209,6 +175,16 @@ public static class Theme
         path.AddArc(rect.Left, rect.Bottom - d, d, d, 90, 90);
         path.CloseFigure();
         return path;
+    }
+
+    public static Color Lerp(Color from, Color to, float t)
+    {
+        t = Math.Clamp(t, 0f, 1f);
+        return Color.FromArgb(
+            (int)Math.Round(from.A + (to.A - from.A) * t),
+            (int)Math.Round(from.R + (to.R - from.R) * t),
+            (int)Math.Round(from.G + (to.G - from.G) * t),
+            (int)Math.Round(from.B + (to.B - from.B) * t));
     }
 
     public static void FillRounded(Graphics g, RectangleF rect, float radius, Color color)

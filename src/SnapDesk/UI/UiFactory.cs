@@ -24,7 +24,7 @@ public static class UiFactory
         => new(options);
 
     public static Label Label(string text, bool small = false)
-        => new SmoothLabel
+        => new()
         {
             Text = text,
             AutoSize = true,
@@ -32,49 +32,6 @@ public static class UiFactory
             BackColor = Color.Transparent,
             Font = small ? Theme.SmallFont : Theme.UiFont,
         };
-
-    private sealed class SmoothLabel : Label
-    {
-        public SmoothLabel()
-        {
-            SetStyle(
-                ControlStyles.UserPaint |
-                ControlStyles.AllPaintingInWmPaint |
-                ControlStyles.OptimizedDoubleBuffer |
-                ControlStyles.SupportsTransparentBackColor,
-                true);
-        }
-
-        public override Size GetPreferredSize(Size proposedSize)
-        {
-            if (string.IsNullOrEmpty(Text))
-            {
-                return new Size(0, (int)Math.Ceiling(Font.GetHeight()) + 4);
-            }
-
-            using var g = CreateGraphics();
-            g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAlias;
-            var limit = MaximumSize.Width > 0 ? MaximumSize.Width : 2000;
-            var sz = g.MeasureString(Text, Font, limit, StringFormat.GenericDefault);
-            return new Size((int)Math.Ceiling(sz.Width) + 6, (int)Math.Ceiling(sz.Height) + 2);
-        }
-
-        protected override void OnPaint(PaintEventArgs e)
-        {
-            var g = e.Graphics;
-            Theme.Prepare(g);
-            if (string.IsNullOrEmpty(Text)) return;
-
-            g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAlias;
-            using var format = new StringFormat
-            {
-                Alignment = StringAlignment.Near,
-                LineAlignment = StringAlignment.Center,
-            };
-            using var brush = new SolidBrush(Enabled ? ForeColor : Theme.Disabled);
-            g.DrawString(Text, Font, brush, ClientRectangle, format);
-        }
-    }
 
     public static ComboBox Combo()
         => new AppleComboBox();
