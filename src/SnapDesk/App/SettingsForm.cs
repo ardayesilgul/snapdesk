@@ -1,6 +1,7 @@
 using System.Drawing.Drawing2D;
 using System.Runtime.InteropServices;
 using SnapDesk.Core;
+using SnapDesk.Editor;
 using SnapDesk.Ocr;
 using SnapDesk.UI;
 
@@ -30,6 +31,7 @@ public sealed class SettingsForm : Form
     private readonly LinearStepper _block;
     private readonly LinearStepper _fps;
     private readonly ComboBox _ocrLanguage;
+    private readonly CheckBox _startWithWindows;
     private readonly CheckBox _magnifier;
     private readonly CheckBox _confirmEscape;
     private readonly CheckBox _copyOnCapture;
@@ -58,7 +60,7 @@ public sealed class SettingsForm : Form
 
         UiFactory.StyleForm(this);
         UiFactory.AttachSmoothEntrance(this);
-        Text = "SnapDesk — Ayarlar";
+        Text = "SnapDesk";
         StartPosition = FormStartPosition.CenterScreen;
         ClientSize = new Size(632, 750);
         MinimumSize = new Size(632, 640);
@@ -102,6 +104,12 @@ public sealed class SettingsForm : Form
         layout.Controls.Add(_content, 0, 0);
 
         var y = 18;
+
+        // 0) Hızlı Başlat Kartı
+        AddSectionHeader("Hızlı Başlat", ref y);
+        var quickStart = BeginCard(ref y);
+        AddQuickActionBar(ref y);
+        EndCard(quickStart, ref y);
 
         // 1) Kısayollar Kartı
         AddSectionHeader("Kısayollar", ref y);
@@ -206,6 +214,7 @@ public sealed class SettingsForm : Form
         AddSectionHeader("Davranış", ref y);
         cardStart = BeginCard(ref y);
 
+        _startWithWindows = AddCheckRow("Windows açılışında başlat (tepsi simgesini hazır tut)", _settings.StartWithWindows, ref y);
         _magnifier = AddCheckRow("Yakalama sırasında piksel büyütecini göster", _settings.ShowMagnifier, ref y);
         _confirmEscape = AddCheckRow("Çizim varken Esc ile çıkışta onay iste", _settings.ConfirmOnEscape, ref y);
         _copyOnCapture = AddCheckRow("Bölge seçildiğinde otomatik olarak panoya kopyala", _settings.CopyToClipboardOnCapture, ref y);
@@ -233,30 +242,36 @@ public sealed class SettingsForm : Form
         y += 22;
         EndCard(cardStart, ref y);
 
-        var resetAll = UiFactory.Button("Varsayılanlara sıfırla", 156, 34);
+        var resetAll = UiFactory.Button("Varsayılanlara sıfırla", 148, 34);
         resetAll.BackColor = Theme.ToolbarBack;
         resetAll.Location = new Point(20, 14);
         resetAll.Click += (_, _) => ResetAllToDefaults();
 
-        var save = UiFactory.Button("Kaydet", 112, 34, primary: true);
+        var exitApp = UiFactory.Button("Uygulamadan çık", 132, 34);
+        exitApp.BackColor = Theme.ToolbarBack;
+        exitApp.Location = new Point(176, 14);
+        exitApp.Click += (_, _) => _app.Exit();
+
+        var save = UiFactory.Button("Kaydet", 108, 34, primary: true);
         save.BackColor = Theme.ToolbarBack;
         save.Location = new Point(10, 14);
         save.Click += (_, _) => SaveSettings();
 
-        var cancel = UiFactory.Button("İptal", 104, 34);
+        var cancel = UiFactory.Button("İptal", 100, 34);
         cancel.BackColor = Theme.ToolbarBack;
-        cancel.Location = new Point(130, 14);
+        cancel.Location = new Point(126, 14);
         cancel.Click += (_, _) => Close();
 
         _bottom.Controls.Add(resetAll);
+        _bottom.Controls.Add(exitApp);
         _bottom.Controls.Add(save);
         _bottom.Controls.Add(cancel);
 
         void LayoutButtons()
         {
-            var left = Math.Max(190, _bottom.ClientSize.Width - 244);
+            var left = Math.Max(320, _bottom.ClientSize.Width - 236);
             save.Left = left;
-            cancel.Left = left + 120;
+            cancel.Left = left + 116;
         }
 
         _bottom.Resize += (_, _) => LayoutButtons();
@@ -352,6 +367,64 @@ public sealed class SettingsForm : Form
             : "Yerel Windows OCR motoru · çevrimdışı";
     }
 
+    private void AddQuickActionBar(ref int y)
+    {
+        var actions = new (string Label, CaptureIntent Intent, int Width, bool Primary)[]
+        {
+            ("Ekran Yakala", CaptureIntent.Edit, 148, true),
+            ("Sabitle", CaptureIntent.Pin, 92, false),
+            ("Uzun Yakala", CaptureIntent.LongCapture, 108, false),
+            ("Video", CaptureIntent.Record, 78, false),
+            ("OCR", CaptureIntent.Ocr, 78, false),
+        };
+
+        var x = LabelX;
+        foreach (var (label, intent, width, primary) in actions)
+        {
+            var btn = UiFactory.Button(label, width, 34, primary: primary);
+            btn.BackColor = Theme.SurfaceCard;
+            btn.Location = new Point(x, y);
+            btn.Click += (_, _) => TriggerCaptureFromUi(intent);
+            _content.Controls.Add(btn);
+            x += width + 9;
+        }
+
+        y += 44;
+
+        var pinButtons = new (string Label, Action Handler, int Width)[]
+        {
+            ("Pinleri göster", _app.ShowPins, 112),
+            ("Pinleri gizle", _app.HidePins, 98),
+            ("Pinleri kapat", _app.ClosePins, 106),
+            ("Geçirgenliği kapat", _app.DisablePinClickThrough, 148),
+        };
+
+        x = LabelX;
+        foreach (var (label, handler, width) in pinButtons)
+        {
+            var btn = UiFactory.Button(label, width, 28);
+            btn.BackColor = Theme.SurfaceCard;
+            btn.Location = new Point(x, y);
+            btn.Click += (_, _) => handler();
+            _content.Controls.Add(btn);
+            x += width + 8;
+        }
+
+        y += 36;
+
+        var trayHint = UiFactory.Label("Tepsi simgesi: Sol tık doğrudan yakalar · Sağ tık bu pencereyi açar", small: true);
+        trayHint.ForeColor = Theme.MutedText;
+        trayHint.Location = new Point(LabelX, y);
+        _content.Controls.Add(trayHint);
+        y += 20;
+    }
+
+    private void TriggerCaptureFromUi(CaptureIntent intent)
+    {
+        Close();
+        _app.StartCaptureFromTray(intent);
+    }
+
     private HotkeyBox AddHotkeyRow(string label, string value, string defaultValue, ref int y)
     {
         var text = UiFactory.Label(label);
@@ -364,6 +437,8 @@ public sealed class SettingsForm : Form
             Size = new Size(184, 28),
             Value = value,
         };
+        box.GotFocus += (_, _) => _app.SuspendHotkeys(true);
+        box.LostFocus += (_, _) => _app.SuspendHotkeys(false);
         _content.Controls.Add(box);
 
         var reset = UiFactory.Button("Sıfırla", 74, 28);
@@ -445,6 +520,7 @@ public sealed class SettingsForm : Form
         _block.Value = defaults.MosaicBlockSize;
         _fps.Value = defaults.RecordingFps;
         if (_ocrLanguage.Items.Count > 0) _ocrLanguage.SelectedIndex = 0;
+        _startWithWindows.Checked = defaults.StartWithWindows;
         _magnifier.Checked = defaults.ShowMagnifier;
         _confirmEscape.Checked = defaults.ConfirmOnEscape;
         _copyOnCapture.Checked = defaults.CopyToClipboardOnCapture;
@@ -538,6 +614,7 @@ public sealed class SettingsForm : Form
         _settings.MosaicBlockSize = _block.Value;
         _settings.RecordingFps = _fps.Value;
         _settings.OcrLanguage = (_ocrLanguage.SelectedItem as LanguageItem)?.Tag ?? string.Empty;
+        _settings.StartWithWindows = _startWithWindows.Checked;
         _settings.ShowMagnifier = _magnifier.Checked;
         _settings.ConfirmOnEscape = _confirmEscape.Checked;
         _settings.CopyToClipboardOnCapture = _copyOnCapture.Checked;
@@ -564,6 +641,7 @@ public sealed class SettingsForm : Form
 
         _settings.Normalize();
         _settings.Save();
+        StartupRegistration.Sync(_settings.StartWithWindows);
         _app.ApplyHotkeys(notify: true);
         _app.RefreshActiveSessionToolbar();
 
@@ -590,7 +668,7 @@ public sealed class SettingsForm : Form
             return;
         }
 
-        _hotkeyStatus.Text = "Ayarlar açıkken global kısayollar geçici olarak devre dışı.";
+        _hotkeyStatus.Text = "Yeni kısayol atamak için tuş kombinasyonuna basın (Esc: iptal)…";
         _hotkeyStatus.ForeColor = Theme.MutedText;
     }
 

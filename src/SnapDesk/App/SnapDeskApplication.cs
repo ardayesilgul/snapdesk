@@ -20,7 +20,8 @@ public sealed class SnapDeskApplication
     private TrayIcon? _tray;
     private CaptureSession? _session;
     private SettingsForm? _settingsForm;
-    private bool _settingsHotkeysSuspended;
+    private System.Windows.Forms.Timer? _trayCaptureTimer;
+    private bool _hotkeysSuspended;
     private bool _exiting;
 
     public Settings Settings => _settings;
@@ -39,9 +40,10 @@ public sealed class SnapDeskApplication
         CaptureSession.Created += TrackSession;
     }
 
-    public void Start()
+    public void Start(bool showStartupBalloon = true)
     {
         Current = this;
+        StartupRegistration.Sync(_settings.StartWithWindows);
 
         _tray = new TrayIcon(this);
         _tray.Show();
@@ -51,9 +53,12 @@ public sealed class SnapDeskApplication
 
         _instance.StartListening();
 
-        _tray.ShowBalloon(
-            "SnapDesk çalışıyor",
-            $"{_settings.CaptureHotkey} ile ekran görüntüsü alın. Tepsi simgesinden tüm özelliklere ulaşabilirsiniz.");
+        if (showStartupBalloon)
+        {
+            _tray.ShowBalloon(
+                "SnapDesk hazır",
+                $"Tepsi simgesine sol tık veya {_settings.CaptureHotkey} ile ekran yakalayın. Sağ tık ile arayüzü açın.");
+        }
     }
 
     public void HandleCommand(string command)
@@ -64,7 +69,7 @@ public sealed class SnapDeskApplication
             return;
         }
 
-        switch (command.Trim().ToLowerInvariant())
+        switch (command.Trim().TrimStart('-').ToLowerInvariant())
         {
             case "capture":
             case "screenshot":
@@ -87,6 +92,9 @@ public sealed class SnapDeskApplication
                 break;
             case "exit":
                 Exit();
+                break;
+            case "tray":
+            case "silent":
                 break;
         }
     }
@@ -111,6 +119,41 @@ public sealed class SnapDeskApplication
                 StartCapture(CaptureIntent.Record);
                 break;
         }
+    }
+
+    /// <summary>
+    /// Tepsi açılır menüsü veya uygulama arayüzü kapandıktan hemen sonra
+    /// yakalamayı başlatır; açılır pencerenin ekran görüntüsüne girmesini önler.
+    /// </summary>
+    public void StartCaptureFromTray(CaptureIntent intent = CaptureIntent.Edit)
+    {
+        if (_session is not null)
+        {
+            _session.FocusOverlay();
+            return;
+        }
+
+        if (_trayCaptureTimer is not null)
+        {
+            return;
+        }
+
+        var timer = new System.Windows.Forms.Timer { Interval = 180 };
+        _trayCaptureTimer = timer;
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            if (ReferenceEquals(_trayCaptureTimer, timer))
+            {
+                _trayCaptureTimer = null;
+            }
+            timer.Dispose();
+            if (!_exiting)
+            {
+                StartCapture(intent);
+            }
+        };
+        timer.Start();
     }
 
     public void StartCapture(CaptureIntent intent = CaptureIntent.Edit)
@@ -192,37 +235,62 @@ public sealed class SnapDeskApplication
         }
     }
 
+    public void SuspendHotkeys(bool suspend)
+    {
+        if (_exiting || _hotkeysSuspended == suspend)
+        {
+            return;
+        }
+
+        _hotkeysSuspended = suspend;
+        if (suspend)
+        {
+            _hotkeys.UnregisterAll();
+            _settingsForm?.ShowHotkeysSuspended();
+        }
+        else
+        {
+            ApplyHotkeys(notify: false);
+        }
+    }
+
     public void ShowSettings(IWin32Window? owner = null)
     {
         if (_settingsForm is { IsDisposed: false })
         {
+            if (_settingsForm.WindowState == FormWindowState.Minimized)
+            {
+                _settingsForm.WindowState = FormWindowState.Normal;
+            }
+
             _settingsForm.Show();
+            _settingsForm.BringToFront();
+            if (owner is null)
+            {
+                var prev = _settingsForm.TopMost;
+                _settingsForm.TopMost = true;
+                _settingsForm.TopMost = prev;
+            }
             _settingsForm.Activate();
             return;
         }
 
-        // Tepsideki "Ayarlar" da açık bir yakalama oturumunun üstünde görünsün.
+        // Açık bir yakalama oturumu varsa pencere kaplamanın üstünde görünsün.
         owner ??= _session?.OwnerWindow;
 
         _settingsForm = new SettingsForm(this);
         _settingsForm.FormClosed += (_, _) =>
         {
             _settingsForm = null;
-            if (!_settingsHotkeysSuspended) return;
-            _settingsHotkeysSuspended = false;
+            if (!_hotkeysSuspended) return;
+            _hotkeysSuspended = false;
             if (!_exiting)
             {
                 ApplyHotkeys(notify: false);
             }
         };
 
-        // Kısayol kutusuna bir kombinasyon yazılırken aynı kombinasyonun
-        // global eylemi tetiklenmesin.
-        _hotkeys.UnregisterAll();
-        _settingsHotkeysSuspended = true;
-        _settingsForm.ShowHotkeysSuspended();
-
-        // Yakalama kaplaması tam ekran ve TopMost. Ayarlar penceresi sahibi
+        // Yakalama kaplaması tam ekran ve TopMost. Pencere sahibi
         // olmadan açılırsa kaplamanın arkasında görünmez kalır.
         if (owner is not null)
         {
@@ -231,6 +299,9 @@ public sealed class SnapDeskApplication
         else
         {
             _settingsForm.Show();
+            _settingsForm.BringToFront();
+            _settingsForm.TopMost = true;
+            _settingsForm.TopMost = false;
         }
 
         _settingsForm.Activate();
@@ -247,6 +318,10 @@ public sealed class SnapDeskApplication
     public void Exit()
     {
         _exiting = true;
+        _trayCaptureTimer?.Stop();
+        _trayCaptureTimer?.Dispose();
+        _trayCaptureTimer = null;
+
         _session?.Dispose();
         _session = null;
 

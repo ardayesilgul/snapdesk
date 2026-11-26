@@ -21,6 +21,11 @@ if (-not $SkipTests) {
 }
 
 $outputDir = "$root\dist\SingleFile"
+$exePath = "$outputDir\SnapDesk.exe"
+
+Get-Process SnapDesk -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+Start-Sleep -Milliseconds 300
+
 Write-Host "==> Single-file Release derlemesi oluşturuluyor -> $outputDir" -ForegroundColor Yellow
 
 dotnet publish "$root\src\SnapDesk\SnapDesk.csproj" `
@@ -35,22 +40,30 @@ if ($LASTEXITCODE -ne 0) {
     Write-Error "Yayınlama başarısız oldu!"
 }
 
-$exePath = "$outputDir\SnapDesk.exe"
-$icoPath = "$root\src\SnapDesk\app.ico"
 $desktopPath = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::Desktop)
-$shortcutPath = Join-Path $desktopPath "SnapDesk.lnk"
+$startMenuPrograms = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::Programs)
+$shortcutPaths = @(
+    (Join-Path $desktopPath "SnapDesk.lnk"),
+    (Join-Path $startMenuPrograms "SnapDesk.lnk")
+)
 
-Write-Host "==> Masaüstü kısayolu güncelleniyor: $shortcutPath" -ForegroundColor Yellow
-if (Test-Path $shortcutPath) {
-    Remove-Item $shortcutPath -Force
-}
 $wsh = New-Object -ComObject WScript.Shell
-$shortcut = $wsh.CreateShortcut($shortcutPath)
-$shortcut.TargetPath = $exePath
-$shortcut.WorkingDirectory = $outputDir
-$shortcut.Description = "SnapDesk - Modern Ekran Görüntüsü, Düzenleme ve Sabitleme Aracı"
-$shortcut.IconLocation = "$exePath,0"
-$shortcut.Save()
+foreach ($shortcutPath in $shortcutPaths) {
+    Write-Host "==> Kısayol güncelleniyor: $shortcutPath" -ForegroundColor Yellow
+    $dir = Split-Path -Parent $shortcutPath
+    if (-not (Test-Path $dir)) {
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+    }
+    if (Test-Path $shortcutPath) {
+        Remove-Item $shortcutPath -Force
+    }
+    $shortcut = $wsh.CreateShortcut($shortcutPath)
+    $shortcut.TargetPath = $exePath
+    $shortcut.WorkingDirectory = $outputDir
+    $shortcut.Description = "SnapDesk - Ekran Görüntüsü, Düzenleme ve Sabitleme Aracı"
+    $shortcut.IconLocation = "$exePath,0"
+    $shortcut.Save()
+}
 
 try {
     Add-Type -TypeDefinition '
@@ -64,4 +77,7 @@ try {
 } catch {
 }
 
-Write-Host "==> Başarılı! Masaüstü simgen hazır: $shortcutPath" -ForegroundColor Green
+Write-Host "==> SnapDesk sistem tepsisinde başlatılıyor..." -ForegroundColor Yellow
+Start-Process -FilePath $exePath -ArgumentList "--tray" -WorkingDirectory $outputDir
+
+Write-Host "==> Başarılı! Masaüstü ve Başlat Menüsü kısayolları hazır, SnapDesk sistem tepsisinde çalışıyor." -ForegroundColor Green

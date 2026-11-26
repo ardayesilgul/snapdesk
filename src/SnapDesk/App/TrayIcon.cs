@@ -1,54 +1,45 @@
 using SnapDesk.Core;
-using SnapDesk.Editor;
-using SnapDesk.UI;
 
 namespace SnapDesk;
 
-/// <summary>Sistem tepsisi simgesi ve bağlam menüsü.</summary>
+/// <summary>Sistem tepsisi simgesi: sol tıkla yakala, sağ tıkla uygulama arayüzünü aç.</summary>
 public sealed class TrayIcon : IDisposable
 {
     private readonly SnapDeskApplication _app;
     private readonly NotifyIcon _icon;
-    private readonly ContextMenuStrip _menu;
     private readonly Icon _generatedIcon;
 
     public TrayIcon(SnapDeskApplication app)
     {
         _app = app;
-
         _generatedIcon = CreateIcon();
-        _menu = new ContextMenuStrip
-        {
-            BackColor = Theme.ToolbarBack,
-            ForeColor = Theme.Text,
-            Renderer = new DarkMenuRenderer(),
-            ShowImageMargin = false,
-            Font = Theme.UiFont,
-        };
 
         _icon = new NotifyIcon
         {
             Icon = _generatedIcon,
-            Text = "SnapDesk — ekran görüntüsü ve düzenleme",
+            Text = "SnapDesk — Sol tık: yakala | Sağ tık: arayüz",
             Visible = false,
-            ContextMenuStrip = _menu,
         };
 
-        _icon.DoubleClick += (_, _) => _app.StartCapture();
         _icon.MouseClick += (_, e) =>
         {
             if (e.Button == MouseButtons.Left)
             {
-                _app.StartCapture();
+                _app.StartCaptureFromTray();
+            }
+            else if (e.Button == MouseButtons.Right)
+            {
+                _app.ShowSettings();
             }
         };
-
-        RebuildMenu();
     }
 
     public void Show() => _icon.Visible = true;
 
-    public void Refresh() => RebuildMenu();
+    public void Refresh()
+    {
+        // Simge ipucu metni sabit; gelecekte dinamik güncelleme gerekirse buraya eklenir.
+    }
 
     public void ShowBalloon(string title, string text)
     {
@@ -63,46 +54,6 @@ public sealed class TrayIcon : IDisposable
         {
             // bildirim gösterilemediyse sorun değil
         }
-    }
-
-    private void RebuildMenu()
-    {
-        _menu.Items.Clear();
-
-        var settings = _app.Settings;
-        var capture = new ToolStripMenuItem($"Ekran yakala    {settings.CaptureHotkey}")
-        {
-            Font = Theme.UiFontBold,
-        };
-        capture.Click += (_, _) => _app.StartCapture();
-        _menu.Items.Add(capture);
-
-        _menu.Items.Add(Item($"Sabitle    {settings.PinHotkey}", () =>
-            _app.StartCapture(CaptureIntent.Pin)));
-        _menu.Items.Add(Item($"Uzun yakalama    {settings.LongCaptureHotkey}", () =>
-            _app.StartCapture(CaptureIntent.LongCapture)));
-        _menu.Items.Add(Item($"Video kaydet    {settings.RecordHotkey}", () =>
-            _app.StartCapture(CaptureIntent.Record)));
-        _menu.Items.Add(Item("Metni tanı (OCR)", () =>
-            _app.StartCapture(CaptureIntent.Ocr)));
-
-        _menu.Items.Add(new ToolStripSeparator());
-
-        _menu.Items.Add(Item("Pinleri göster", _app.ShowPins));
-        _menu.Items.Add(Item("Pinleri gizle", _app.HidePins));
-        _menu.Items.Add(Item("Tüm pinleri kapat", _app.ClosePins));
-        _menu.Items.Add(Item("Fare geçirgenliğini kapat", _app.DisablePinClickThrough));
-
-        _menu.Items.Add(new ToolStripSeparator());
-        _menu.Items.Add(Item("Ayarlar…", () => _app.ShowSettings()));
-        _menu.Items.Add(Item("Çıkış", _app.Exit));
-    }
-
-    private static ToolStripMenuItem Item(string text, Action action)
-    {
-        var item = new ToolStripMenuItem(text);
-        item.Click += (_, _) => action();
-        return item;
     }
 
     /// <summary>Uygulama simgesi: Gömülü app.ico kaynağını veya exe simgesini yükler.</summary>
@@ -145,7 +96,6 @@ public sealed class TrayIcon : IDisposable
     {
         _icon.Visible = false;
         _icon.Dispose();
-        _menu.Dispose();
         _generatedIcon.Dispose();
     }
 }

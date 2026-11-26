@@ -27,6 +27,7 @@
 - **Yerel Metin Tanıma (OCR):** Windows yerel OCR altyapısıyla tamamen çevrimdışı metin tanıma. Satır düzenini ve boşlukları korur, doğrudan panoya kopyalanabilir veya `.txt` olarak kaydedilebilir.
 - **Uzun (Kaydırmalı) Yakalama:** Tekerlek kaydırmalı örtüşme eşleme ile uzun sayfaları ve belgeleri dikeyde birleştirme.
 - **Bölge Video Kaydı:** FFmpeg altyapısıyla duraklat/devam et destekli bölge kaydı, MP4 ve GIF olarak dışa aktarma.
+- **Sistem Tepsisi ve Tek Tıkla Yakalama:** Windows sağ alttaki gizli simgeler (`^`) tepsisinde hazır bekler. Simgeye **sol tıklayarak** kısayol gerekmeden doğrudan ekran görüntüsü alabilir, **sağ tıklayarak** SnapDesk uygulama arayüzünü ve ayarları açabilirsiniz.
 
 ## Kısayollar
 
@@ -39,7 +40,7 @@
 | `Ctrl + 3` | Uzun (kaydırmalı) yakalama |
 | `Ctrl + 4` | Bölge video kaydı |
 
-*Tüm kısayollar Tepsi Menüsü → Ayarlar üzerinden özelleştirilebilir.*
+*Tüm kısayollar tepsi simgesine sağ tıklayıp uygulama arayüzünü açarak özelleştirilebilir.*
 
 ### Düzenleyici Kısayolları
 

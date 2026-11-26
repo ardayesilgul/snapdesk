@@ -25,12 +25,23 @@ internal static class Program
         Application.ThreadException += (_, e) => ShowFatal(e.Exception);
         AppDomain.CurrentDomain.UnhandledException += (_, e) => ShowFatal(e.ExceptionObject as Exception);
 
-        app.Start();
-        if (args.Length > 0 && !string.IsNullOrWhiteSpace(args[0]))
+        var quietTray = args.Length > 0 && IsQuietTrayArg(args[0]);
+        app.Start(showStartupBalloon: !quietTray);
+        if (args.Length > 0 && !string.IsNullOrWhiteSpace(args[0]) && !quietTray)
         {
             app.HandleCommand(args[0]);
         }
         Application.Run(new ApplicationContext());
+    }
+
+    private static bool IsQuietTrayArg(string? arg)
+    {
+        if (string.IsNullOrWhiteSpace(arg))
+        {
+            return false;
+        }
+
+        return arg.Trim().TrimStart('-').ToLowerInvariant() is "tray" or "silent";
     }
 
     private static void ShowFatal(Exception? exception)

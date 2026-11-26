@@ -27,6 +27,7 @@
 - **Local OCR:** Offline text recognition powered by Windows OCR APIs. Retains original text formatting, line breaks, and allows immediate copy or plain text export.
 - **Scrolling Capture:** Vertical capture stitching for long documents and web pages.
 - **Screen Recording:** Region-based video recording powered by FFmpeg with pause, resume, and MP4/GIF export.
+- **System Tray & 1-Click Capture:** Lives cleanly in the Windows notification area (`^` tray or pinned taskbar). **Left-click** the tray icon to capture immediately without hotkeys, or **right-click** to open the SnapDesk interface and settings.
 
 ## Keyboard Shortcuts
 
@@ -39,7 +40,7 @@
 | `Ctrl + 3` | Scrolling capture |
 | `Ctrl + 4` | Region video recording |
 
-*All shortcuts can be remapped from the Tray Menu → Settings.*
+*All shortcuts can be remapped by right-clicking the SnapDesk tray icon to open the interface.*
 
 ### Editor Shortcuts
 

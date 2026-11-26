@@ -59,6 +59,9 @@ public sealed class Settings
     public bool ShowToolbarOcr { get; set; } = true;
     public bool ShowToolbarPin { get; set; } = true;
 
+    /// <summary>Windows oturum açılışında sistem tepsisinde hazır başla.</summary>
+    public bool StartWithWindows { get; set; } = true;
+
     /// <summary>Kayıtta ses kaynağı yok (bkz. README): yalnızca görüntü.</summary>
     public bool FirstRunCompleted { get; set; }
 
