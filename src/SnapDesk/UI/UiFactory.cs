@@ -33,8 +33,8 @@ public static class UiFactory
             Font = small ? Theme.SmallFont : Theme.UiFont,
         };
 
-    public static ComboBox Combo()
-        => new AppleComboBox();
+    public static ApplePicker Combo()
+        => new();
 
     public static Panel CardPanel(Color? fill = null, float radius = 10f)
         => new RoundedCardPanel(fill ?? Theme.SurfaceCard, radius);
@@ -267,6 +267,8 @@ public static class UiFactory
             _animTimer.Start();
         }
 
+        protected override void OnPaintBackground(PaintEventArgs pevent) { }
+
         protected override void OnPaint(PaintEventArgs pevent)
         {
             var g = pevent.Graphics;
@@ -421,6 +423,8 @@ public static class UiFactory
             _animTimer.Start();
         }
 
+        protected override void OnPaintBackground(PaintEventArgs pevent) { }
+
         protected override void OnPaint(PaintEventArgs pevent)
         {
             var g = pevent.Graphics;
@@ -467,130 +471,154 @@ public static class UiFactory
         }
     }
 
-    // ----------------------------------------------------------------- AppleComboBox
+    // ----------------------------------------------------------------- ApplePicker
 
-    private sealed class AppleComboBox : ComboBox
+    public sealed class ApplePicker : Control
     {
-        private const int WmPaint = 0x000F;
+        private readonly System.Windows.Forms.Timer _animTimer = new() { Interval = 16 };
+        private readonly List<object> _items = new();
+        private int _selectedIndex = -1;
+        private float _hoverAnim;
         private bool _hovered;
+        private bool _droppedDown;
 
-        public AppleComboBox()
+        public event EventHandler? SelectedIndexChanged;
+
+        public IList<object> Items => _items;
+
+        public ApplePicker()
         {
-            DropDownStyle = ComboBoxStyle.DropDownList;
-            DrawMode = DrawMode.OwnerDrawFixed;
-            ItemHeight = 22;
-            FlatStyle = FlatStyle.Flat;
-            BackColor = Theme.SurfaceInput;
+            _animTimer.Tick += (_, _) => StepAnimation();
+            SetStyle(
+                ControlStyles.AllPaintingInWmPaint |
+                ControlStyles.OptimizedDoubleBuffer |
+                ControlStyles.UserPaint |
+                ControlStyles.ResizeRedraw |
+                ControlStyles.Selectable,
+                true);
+            Size = new Size(220, 30);
+            BackColor = Theme.SurfaceCard;
             ForeColor = Theme.Text;
             Font = Theme.UiFont;
             Cursor = Cursors.Hand;
         }
 
-        protected override void OnMouseEnter(EventArgs e)
+        [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+        public int SelectedIndex
         {
-            base.OnMouseEnter(e);
-            _hovered = true;
-            Invalidate();
-        }
-
-        protected override void OnMouseLeave(EventArgs e)
-        {
-            base.OnMouseLeave(e);
-            _hovered = false;
-            Invalidate();
-        }
-
-        protected override void OnGotFocus(EventArgs e)
-        {
-            base.OnGotFocus(e);
-            Invalidate();
-        }
-
-        protected override void OnLostFocus(EventArgs e)
-        {
-            base.OnLostFocus(e);
-            Invalidate();
-        }
-
-        protected override void OnDropDown(EventArgs e)
-        {
-            base.OnDropDown(e);
-            Invalidate();
-        }
-
-        protected override void OnDropDownClosed(EventArgs e)
-        {
-            base.OnDropDownClosed(e);
-            Invalidate();
-        }
-
-        protected override void OnDrawItem(DrawItemEventArgs e)
-        {
-            if (e.Index < 0 || e.Index >= Items.Count)
+            get => _selectedIndex;
+            set
             {
-                return;
+                var next = _items.Count == 0 ? -1 : Math.Clamp(value, 0, _items.Count - 1);
+                if (_selectedIndex == next) return;
+                _selectedIndex = next;
+                Invalidate();
+                SelectedIndexChanged?.Invoke(this, EventArgs.Empty);
+            }
+        }
+
+        [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+        public object? SelectedItem
+        {
+            get => _selectedIndex >= 0 && _selectedIndex < _items.Count ? _items[_selectedIndex] : null;
+            set
+            {
+                if (value is null)
+                {
+                    SelectedIndex = -1;
+                    return;
+                }
+
+                var idx = _items.IndexOf(value);
+                if (idx >= 0) SelectedIndex = idx;
+            }
+        }
+
+        private void StepAnimation()
+        {
+            var target = (_hovered || _droppedDown) && Enabled ? 1f : 0f;
+            _hoverAnim += (target - _hoverAnim) * 0.34f;
+            if (Math.Abs(target - _hoverAnim) < 0.01f)
+            {
+                _hoverAnim = target;
+                _animTimer.Stop();
+            }
+            Invalidate();
+        }
+
+        protected override void OnMouseEnter(EventArgs e) { base.OnMouseEnter(e); _hovered = true; _animTimer.Start(); }
+        protected override void OnMouseLeave(EventArgs e) { base.OnMouseLeave(e); _hovered = false; _animTimer.Start(); }
+        protected override void OnGotFocus(EventArgs e) { base.OnGotFocus(e); Invalidate(); }
+        protected override void OnLostFocus(EventArgs e) { base.OnLostFocus(e); Invalidate(); }
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            base.OnMouseDown(e);
+            if (e.Button == MouseButtons.Left && Enabled && _items.Count > 0)
+            {
+                Focus();
+                ShowDropdown();
+            }
+        }
+
+        private void ShowDropdown()
+        {
+            var menu = new ContextMenuStrip
+            {
+                BackColor = Theme.ToolbarBack,
+                ForeColor = Theme.Text,
+                Renderer = new DarkMenuRenderer(),
+                ShowImageMargin = false,
+                Font = Font,
+                MinimumSize = new Size(Width, 0),
+                MaximumSize = new Size(Width + 60, 320),
+            };
+
+            for (var i = 0; i < _items.Count; i++)
+            {
+                var idx = i;
+                var label = _items[i]?.ToString() ?? string.Empty;
+                var item = new ToolStripMenuItem(label)
+                {
+                    Checked = idx == _selectedIndex,
+                };
+                item.Click += (_, _) => SelectedIndex = idx;
+                menu.Items.Add(item);
             }
 
+            _droppedDown = true;
+            _animTimer.Start();
+            menu.Closed += (_, _) =>
+            {
+                _droppedDown = false;
+                _animTimer.Start();
+                DisposeLater(menu);
+            };
+            menu.Show(this, new Point(0, Height + 4));
+        }
+
+        protected override void OnPaintBackground(PaintEventArgs pevent) { }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
             var g = e.Graphics;
             Theme.Prepare(g);
 
-            var selected = (e.State & DrawItemState.Selected) != 0 && (e.State & DrawItemState.ComboBoxEdit) == 0;
-            using (var bgBrush = new SolidBrush(Theme.ToolbarBack))
-            {
-                g.FillRectangle(bgBrush, e.Bounds);
-            }
-
-            if (selected)
-            {
-                var pill = new RectangleF(e.Bounds.X + 3f, e.Bounds.Y + 1.5f, Math.Max(4f, e.Bounds.Width - 6f), Math.Max(4f, e.Bounds.Height - 3f));
-                Theme.FillRounded(g, pill, 5f, Theme.AppleBlue);
-            }
-
-            var text = Items[e.Index]?.ToString() ?? string.Empty;
-            var textRect = new Rectangle(e.Bounds.X + 10, e.Bounds.Y, Math.Max(10, e.Bounds.Width - 16), e.Bounds.Height);
-            TextRenderer.DrawText(
-                g, text, Font, textRect,
-                selected ? Color.White : Theme.Text,
-                TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
-        }
-
-        protected override void WndProc(ref Message m)
-        {
-            base.WndProc(ref m);
-
-            if (m.Msg == WmPaint)
-            {
-                using var g = CreateGraphics();
-                PaintSurface(g);
-            }
-            else if (m.Msg == 0x0318 /* WM_PRINTCLIENT */ && m.WParam != IntPtr.Zero)
-            {
-                using var g = Graphics.FromHdc(m.WParam);
-                PaintSurface(g);
-            }
-        }
-
-        private void PaintSurface(Graphics g)
-        {
-            Theme.Prepare(g);
-
-            var bgClear = Parent?.BackColor is { A: 255 } parentBg ? parentBg : Theme.WindowBack;
+            var bgClear = Parent?.BackColor is { A: 255 } parentBg ? parentBg : Theme.SurfaceCard;
             g.Clear(bgClear);
 
             var rect = new RectangleF(0.5f, 0.5f, Width - 1f, Height - 1f);
             var radius = 7f;
-            var fill = DroppedDown || _hovered ? Theme.SurfaceHover : Theme.SurfaceInput;
-            var border = DroppedDown || Focused
+            var fill = Theme.Lerp(Theme.SurfaceInput, Theme.SurfaceHover, _hoverAnim);
+            var border = _droppedDown || Focused
                 ? Theme.AppleBlue
-                : _hovered
-                    ? Color.FromArgb(80, 255, 255, 255)
-                    : Theme.InputBorder;
+                : Theme.Lerp(Theme.InputBorder, Color.FromArgb(80, 255, 255, 255), _hoverAnim);
 
             Theme.FillRounded(g, rect, radius, fill);
-            Theme.DrawRounded(g, rect, radius, border, DroppedDown || Focused ? 1.3f : 1f);
+            Theme.DrawRounded(g, rect, radius, border, _droppedDown || Focused ? 1.3f : 1f);
 
-            var displayText = SelectedItem?.ToString() ?? Text ?? string.Empty;
-            var textRect = new RectangleF(10, 0, Math.Max(10, Width - 32), Height);
+            var displayText = SelectedItem?.ToString() ?? string.Empty;
+            var textRect = new RectangleF(10f, 0f, Math.Max(10f, Width - 32f), Height);
             Theme.DrawText(
                 g, displayText, Font, textRect,
                 Enabled ? Theme.Text : Theme.Disabled,
@@ -598,7 +626,8 @@ public static class UiFactory
 
             var cx = Width - 15f;
             var cy = Height / 2f;
-            using var chevronPen = new Pen(_hovered || DroppedDown ? Color.White : Theme.SubText, 1.5f)
+            var chevronColor = Theme.Lerp(Theme.SubText, Color.White, _hoverAnim);
+            using var chevronPen = new Pen(chevronColor, 1.5f)
             {
                 StartCap = LineCap.Round,
                 EndCap = LineCap.Round,
@@ -610,6 +639,17 @@ public static class UiFactory
                 new PointF(cx, cy + 2.5f),
                 new PointF(cx + 4f, cy - 1.5f),
             });
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _animTimer.Stop();
+                _animTimer.Dispose();
+            }
+
+            base.Dispose(disposing);
         }
     }
 
@@ -915,15 +955,18 @@ public static class UiFactory
 
     public sealed class AppleSegmentedControl : Control
     {
+        private readonly System.Windows.Forms.Timer _animTimer = new() { Interval = 16 };
         private readonly string[] _options;
         private int _selectedIndex;
         private int _hoverIndex = -1;
+        private float _thumbPos;
 
         public event EventHandler? SelectedIndexChanged;
 
         public AppleSegmentedControl(string[] options)
         {
             _options = options.Length > 0 ? options : new[] { "Seçenek" };
+            _animTimer.Tick += (_, _) => StepAnimation();
             SetStyle(
                 ControlStyles.AllPaintingInWmPaint |
                 ControlStyles.OptimizedDoubleBuffer |
@@ -945,7 +988,7 @@ public static class UiFactory
                 var next = Math.Clamp(value, 0, _options.Length - 1);
                 if (_selectedIndex == next) return;
                 _selectedIndex = next;
-                Invalidate();
+                _animTimer.Start();
                 SelectedIndexChanged?.Invoke(this, EventArgs.Empty);
             }
         }
@@ -956,6 +999,18 @@ public static class UiFactory
         {
             var idx = Array.FindIndex(_options, o => o.Equals(value, StringComparison.OrdinalIgnoreCase));
             SelectedIndex = idx >= 0 ? idx : 0;
+        }
+
+        private void StepAnimation()
+        {
+            var target = (float)_selectedIndex;
+            _thumbPos += (target - _thumbPos) * 0.36f;
+            if (Math.Abs(target - _thumbPos) < 0.01f)
+            {
+                _thumbPos = target;
+                _animTimer.Stop();
+            }
+            Invalidate();
         }
 
         protected override void OnMouseMove(MouseEventArgs e)
@@ -983,6 +1038,8 @@ public static class UiFactory
             SelectedIndex = Math.Clamp(e.X * _options.Length / Math.Max(1, Width), 0, _options.Length - 1);
         }
 
+        protected override void OnPaintBackground(PaintEventArgs pevent) { }
+
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics;
@@ -995,24 +1052,35 @@ public static class UiFactory
             Theme.DrawRounded(g, outer, 8f, Theme.InputBorder, 1f);
 
             var segWidth = (Width - 6f) / _options.Length;
+            if (_hoverIndex >= 0 && _hoverIndex != _selectedIndex)
+            {
+                var hoverRect = new RectangleF(3f + _hoverIndex * segWidth, 3f, segWidth, Height - 6f);
+                Theme.FillRounded(g, hoverRect, 6f, Color.FromArgb(18, 255, 255, 255));
+            }
+
+            var thumbRect = new RectangleF(3f + _thumbPos * segWidth, 3f, segWidth, Height - 6f);
+            Theme.FillRounded(g, thumbRect, 6f, Color.FromArgb(44, 45, 54));
+            Theme.DrawRounded(g, thumbRect, 6f, Color.FromArgb(40, 255, 255, 255), 1f);
+
             for (var i = 0; i < _options.Length; i++)
             {
                 var segRect = new RectangleF(3f + i * segWidth, 3f, segWidth, Height - 6f);
-                if (i == _selectedIndex)
-                {
-                    Theme.FillRounded(g, segRect, 6f, Color.FromArgb(44, 45, 54));
-                    Theme.DrawRounded(g, segRect, 6f, Color.FromArgb(40, 255, 255, 255), 1f);
-                }
-                else if (i == _hoverIndex)
-                {
-                    Theme.FillRounded(g, segRect, 6f, Color.FromArgb(20, 255, 255, 255));
-                }
-
                 var color = i == _selectedIndex ? Theme.Text : Theme.SubText;
                 Theme.DrawText(
                     g, _options[i], i == _selectedIndex ? Theme.UiFontBold : Theme.UiFont,
                     segRect, color, StringAlignment.Center, StringAlignment.Center);
             }
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _animTimer.Stop();
+                _animTimer.Dispose();
+            }
+
+            base.Dispose(disposing);
         }
     }
 }

@@ -46,6 +46,7 @@ public enum IconKind
     Layers,
     Cursor,
     LongCapture,
+    Exit,
 }
 
 /// <summary>
@@ -373,6 +374,26 @@ public static class Icons
                 g.DrawLine(pen, 10f, 6f, 10f, 14f);
                 g.DrawLine(pen, 7.5f, 11.5f, 10f, 14f);
                 g.DrawLine(pen, 12.5f, 11.5f, 10f, 14f);
+                break;
+
+            case IconKind.Exit:
+                // Solda kapı çerçevesi, sağa doğru çıkış oku
+                g.DrawLines(pen, new[]
+                {
+                    new PointF(10.5f, 3.8f),
+                    new PointF(5.2f, 3.8f),
+                    new PointF(4.2f, 4.8f),
+                    new PointF(4.2f, 15.2f),
+                    new PointF(5.2f, 16.2f),
+                    new PointF(10.5f, 16.2f),
+                });
+                g.DrawLine(pen, 8.8f, 10f, 16.8f, 10f);
+                g.DrawLines(pen, new[]
+                {
+                    new PointF(13.8f, 6.8f),
+                    new PointF(17f, 10f),
+                    new PointF(13.8f, 13.2f),
+                });
                 break;
         }
 

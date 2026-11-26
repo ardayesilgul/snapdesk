@@ -12,7 +12,7 @@ public sealed class OcrForm : Form
     private readonly Bitmap _image;
     private readonly Settings _settings;
     private readonly TextBox _text;
-    private readonly ComboBox _language;
+    private readonly UiFactory.ApplePicker _language;
     private readonly Label _status;
     private readonly Panel _preview;
     private readonly Button _copy;

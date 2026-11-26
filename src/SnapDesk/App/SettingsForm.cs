@@ -48,7 +48,7 @@ public sealed class SettingsForm : Form
     private readonly UiFactory.AppleToggleSwitch _magnifier;
     private readonly UiFactory.AppleToggleSwitch _confirmEscape;
     private readonly UiFactory.AppleToggleSwitch _copyOnCapture;
-    private readonly ComboBox _ocrLanguage;
+    private readonly UiFactory.ApplePicker _ocrLanguage;
     private readonly Label _ocrInfo;
     private readonly UiFactory.AppleToggleSwitch _autoCopyOcr;
 
@@ -77,7 +77,6 @@ public sealed class SettingsForm : Form
         _color = Color.FromArgb(_settings.DefaultColorArgb);
 
         UiFactory.StyleForm(this);
-        UiFactory.AttachSmoothEntrance(this);
         Text = "SnapDesk";
         StartPosition = FormStartPosition.CenterScreen;
         ClientSize = new Size(SidebarWidth + ContentWidth, BodyHeight + FooterHeight);
@@ -94,12 +93,12 @@ public sealed class SettingsForm : Form
         };
         _headerTitle = MakeLabel(string.Empty, Theme.TitleFont, Theme.Text, Theme.WindowBack, PageMargin, 20);
         _headerSubtitle = MakeLabel(string.Empty, Theme.SmallFont, Theme.SubText, Theme.WindowBack, PageMargin, 48);
-        var lifecyclePill = new TrayLifecyclePill();
-        lifecyclePill.Location = new Point(ContentWidth - PageMargin - lifecyclePill.Width, 21);
-        lifecyclePill.ExitClicked += () => _app.Exit();
+        var exitPill = new ExitAppPill();
+        exitPill.Location = new Point(ContentWidth - PageMargin - exitPill.Width, 21);
+        exitPill.ExitClicked += () => _app.Exit();
         _headerBar.Controls.Add(_headerTitle);
         _headerBar.Controls.Add(_headerSubtitle);
-        _headerBar.Controls.Add(lifecyclePill);
+        _headerBar.Controls.Add(exitPill);
 
         _viewport = new Panel
         {
@@ -156,7 +155,7 @@ public sealed class SettingsForm : Form
             g.DrawLine(divPen, sidebar.Width - 1, 0, sidebar.Width - 1, sidebar.Height);
 
             // Marka ikonu (gömülü app.ico)
-            var iconRect = new Rectangle(18, 22, 28, 28);
+            var iconRect = new Rectangle(18, 23, 28, 28);
             if (Icon is not null)
             {
                 g.InterpolationMode = InterpolationMode.HighQualityBicubic;
@@ -164,7 +163,7 @@ public sealed class SettingsForm : Form
             }
         };
 
-        var brandTitle = MakeLabel("SnapDesk", Theme.Ui(11.5f, FontStyle.Bold), Theme.Text, Theme.ToolbarBack, 54, 18);
+        var brandTitle = MakeLabel("SnapDesk", Theme.Ui(11.5f, FontStyle.Bold), Theme.Text, Theme.ToolbarBack, 54, 19);
         var brandState = MakeLabel("Ekran Aracı", Theme.SmallFont, Theme.MutedText, Theme.ToolbarBack, 54, 41);
         sidebar.Controls.Add(brandTitle);
         sidebar.Controls.Add(brandState);
@@ -193,7 +192,7 @@ public sealed class SettingsForm : Form
             y += 42;
         }
 
-        var versionNote = MakeLabel("v0.9.0 · Çevrimdışı", Theme.SmallFont, Theme.MutedText, Theme.ToolbarBack, 20, BodyHeight + 25);
+        var versionNote = MakeLabel("v0.9.0", Theme.SmallFont, Theme.MutedText, Theme.ToolbarBack, 20, BodyHeight + 25);
         sidebar.Controls.Add(versionNote);
 
         return sidebar;
@@ -331,8 +330,8 @@ public sealed class SettingsForm : Form
             Size = new Size(CardWidth, 64),
         };
 
-        var pinTitle = MakeLabel("Ekran Pinleri", Theme.UiFontBold, Theme.Text, Theme.SurfaceCard, 18, 12);
-        var pinHint = MakeLabel("Sol tık tepsi: yakala · Sağ tık: arayüz", Theme.SmallFont, Theme.MutedText, Theme.SurfaceCard, 18, 33);
+        var pinTitle = MakeLabel("Ekran Pinleri", Theme.UiFontBold, Theme.Text, Theme.SurfaceCard, 18, 13);
+        var pinHint = MakeLabel("Sol tık tepsi: yakala · Sağ tık: arayüz", Theme.SmallFont, Theme.MutedText, Theme.SurfaceCard, 18, 34);
         pinBar.Controls.Add(pinTitle);
         pinBar.Controls.Add(pinHint);
 
@@ -410,7 +409,7 @@ public sealed class SettingsForm : Form
         UiFactory.AppleToggleSwitch Magnifier,
         UiFactory.AppleToggleSwitch ConfirmEscape,
         UiFactory.AppleToggleSwitch CopyOnCapture,
-        ComboBox OcrLanguage,
+        UiFactory.ApplePicker OcrLanguage,
         Label OcrInfo,
         UiFactory.AppleToggleSwitch AutoCopyOcr)
         BuildBehaviorOcrPage(Panel page)
@@ -645,7 +644,7 @@ public sealed class SettingsForm : Form
     private static UiFactory.AppleToggleSwitch AddCompactToggleCell(
         Panel card, int colX, int rowTop, int colWidth, string title, bool value)
     {
-        var label = MakeLabel(title, Theme.UiFont, Theme.Text, Theme.SurfaceCard, colX + 18, rowTop + 14);
+        var label = MakeLabel(title, Theme.UiFont, Theme.Text, Theme.SurfaceCard, colX + 18, rowTop + 13);
         card.Controls.Add(label);
 
         var toggle = UiFactory.Toggle(value);
@@ -892,12 +891,25 @@ public sealed class SettingsForm : Form
 
     // ----------------------------------------------------------------- Custom Controls
 
-    private sealed class TrayLifecyclePill : Control
+    private static Color BlendColor(Color from, Color to, float t)
     {
-        private bool _hoverExit;
+        t = Math.Clamp(t, 0f, 1f);
+        return Color.FromArgb(
+            (int)Math.Round(from.A + (to.A - from.A) * t),
+            (int)Math.Round(from.R + (to.R - from.R) * t),
+            (int)Math.Round(from.G + (to.G - from.G) * t),
+            (int)Math.Round(from.B + (to.B - from.B) * t));
+    }
+
+    private sealed class ExitAppPill : Control
+    {
+        private bool _hovered;
+        private bool _pressed;
+        private float _hoverAnim;
+        private readonly System.Windows.Forms.Timer _animTimer;
         public event Action? ExitClicked;
 
-        public TrayLifecyclePill()
+        public ExitAppPill()
         {
             SetStyle(
                 ControlStyles.AllPaintingInWmPaint |
@@ -905,34 +917,68 @@ public sealed class SettingsForm : Form
                 ControlStyles.UserPaint |
                 ControlStyles.ResizeRedraw,
                 true);
-            Size = new Size(156, 30);
+            Size = new Size(88, 30);
             BackColor = Theme.WindowBack;
+            Cursor = Cursors.Hand;
+            _animTimer = new System.Windows.Forms.Timer { Interval = 16 };
+            _animTimer.Tick += (_, _) =>
+            {
+                var target = _hovered ? 1f : 0f;
+                var next = _hoverAnim + (target - _hoverAnim) * 0.28f;
+                if (Math.Abs(target - next) < 0.02f)
+                {
+                    _hoverAnim = target;
+                    _animTimer.Stop();
+                }
+                else
+                {
+                    _hoverAnim = next;
+                }
+                Invalidate();
+            };
         }
 
-        protected override void OnMouseMove(MouseEventArgs e)
+        protected override void Dispose(bool disposing)
         {
-            base.OnMouseMove(e);
-            var overExit = e.X >= 84;
-            if (overExit != _hoverExit)
-            {
-                _hoverExit = overExit;
-                Cursor = overExit ? Cursors.Hand : Cursors.Default;
-                Invalidate();
-            }
+            if (disposing) _animTimer.Dispose();
+            base.Dispose(disposing);
+        }
+
+        protected override void OnPaintBackground(PaintEventArgs e) { }
+
+        protected override void OnMouseEnter(EventArgs e)
+        {
+            base.OnMouseEnter(e);
+            _hovered = true;
+            _animTimer.Start();
         }
 
         protected override void OnMouseLeave(EventArgs e)
         {
             base.OnMouseLeave(e);
-            _hoverExit = false;
-            Cursor = Cursors.Default;
+            _hovered = false;
+            _pressed = false;
+            _animTimer.Start();
             Invalidate();
         }
 
         protected override void OnMouseDown(MouseEventArgs e)
         {
             base.OnMouseDown(e);
-            if (e.Button == MouseButtons.Left && e.X >= 84)
+            if (e.Button == MouseButtons.Left)
+            {
+                _pressed = true;
+                Invalidate();
+            }
+        }
+
+        protected override void OnMouseUp(MouseEventArgs e)
+        {
+            base.OnMouseUp(e);
+            var trigger = _pressed && e.Button == MouseButtons.Left && ClientRectangle.Contains(e.Location);
+            _pressed = false;
+            Invalidate();
+            if (trigger)
             {
                 ExitClicked?.Invoke();
             }
@@ -945,25 +991,25 @@ public sealed class SettingsForm : Form
             g.Clear(Theme.WindowBack);
 
             var rect = new RectangleF(0.5f, 0.5f, Width - 1f, Height - 1f);
-            Theme.FillRounded(g, rect, 15f, Color.FromArgb(19, 20, 24));
-            Theme.DrawRounded(g, rect, 15f, Color.FromArgb(26, 255, 255, 255), 1f);
+            var fillBase = Color.FromArgb(19, 20, 24);
+            var fillHover = Color.FromArgb(38, 22, 24);
+            var fillPress = Color.FromArgb(48, 20, 22);
+            var fill = _pressed ? fillPress : BlendColor(fillBase, fillHover, _hoverAnim);
 
-            using var dotBrush = new SolidBrush(Color.FromArgb(48, 209, 88));
-            g.FillEllipse(dotBrush, 13f, (Height - 6f) / 2f, 6f, 6f);
-            Theme.DrawText(g, "Tepside", Theme.SmallFont, new RectangleF(24f, 0f, 56f, Height), Theme.SubText, StringAlignment.Near, StringAlignment.Center);
+            var border = BlendColor(
+                Color.FromArgb(26, 255, 255, 255),
+                Color.FromArgb(110, 255, 92, 82),
+                _hoverAnim);
 
-            using var divPen = new Pen(Color.FromArgb(26, 255, 255, 255), 1f);
-            g.DrawLine(divPen, 83f, 7f, 83f, Height - 8f);
+            Theme.FillRounded(g, rect, 15f, fill);
+            Theme.DrawRounded(g, rect, 15f, border, 1f);
 
-            var exitRect = new RectangleF(85.5f, 2.5f, Width - 88f, Height - 5f);
-            if (_hoverExit)
-            {
-                Theme.FillRounded(g, exitRect, 12.5f, Color.FromArgb(46, 255, 69, 58));
-            }
-
-            var exitColor = _hoverExit ? Color.FromArgb(255, 130, 124) : Theme.SubText;
-            Icons.Draw(g, IconKind.Close, new RectangleF(94f, (Height - 10f) / 2f, 10f, 10f), exitColor, 1.4f);
-            Theme.DrawText(g, "Çıkış", Theme.SmallFont, new RectangleF(108f, 0f, 44f, Height), exitColor, StringAlignment.Near, StringAlignment.Center);
+            var exitColor = BlendColor(Theme.SubText, Color.FromArgb(255, 138, 132), _hoverAnim);
+            Icons.Draw(g, IconKind.Exit, new RectangleF(13f, (Height - 13f) / 2f, 13f, 13f), exitColor, 1.45f);
+            Theme.DrawText(
+                g, "Çıkış", Theme.SmallFont,
+                new RectangleF(32f, 0f, Width - 42f, Height),
+                exitColor, StringAlignment.Near, StringAlignment.Center);
         }
     }
 
@@ -972,8 +1018,10 @@ public sealed class SettingsForm : Form
         private readonly string _text;
         private readonly IconKind _icon;
         private readonly bool _dangerOnHover;
+        private readonly System.Windows.Forms.Timer _animTimer;
         private bool _active;
         private bool _hovered;
+        private float _hoverAnim;
 
         public SidebarTab(string text, IconKind icon, bool dangerOnHover = false)
         {
@@ -988,7 +1036,31 @@ public sealed class SettingsForm : Form
                 true);
             BackColor = Theme.ToolbarBack;
             Cursor = Cursors.Hand;
+            _animTimer = new System.Windows.Forms.Timer { Interval = 16 };
+            _animTimer.Tick += (_, _) =>
+            {
+                var target = _hovered ? 1f : 0f;
+                var next = _hoverAnim + (target - _hoverAnim) * 0.28f;
+                if (Math.Abs(target - next) < 0.02f)
+                {
+                    _hoverAnim = target;
+                    _animTimer.Stop();
+                }
+                else
+                {
+                    _hoverAnim = next;
+                }
+                Invalidate();
+            };
         }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) _animTimer.Dispose();
+            base.Dispose(disposing);
+        }
+
+        protected override void OnPaintBackground(PaintEventArgs e) { }
 
         [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
         public bool Active
@@ -1006,14 +1078,14 @@ public sealed class SettingsForm : Form
         {
             base.OnMouseEnter(e);
             _hovered = true;
-            Invalidate();
+            _animTimer.Start();
         }
 
         protected override void OnMouseLeave(EventArgs e)
         {
             base.OnMouseLeave(e);
             _hovered = false;
-            Invalidate();
+            _animTimer.Start();
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -1027,31 +1099,33 @@ public sealed class SettingsForm : Form
             {
                 Theme.FillRounded(g, rect, 8f, Color.FromArgb(28, 29, 36));
                 Theme.DrawRounded(g, rect, 8f, Color.FromArgb(30, 255, 255, 255), 1f);
-                using var barBrush = new SolidBrush(Theme.AppleBlue);
                 Theme.FillRounded(g, new RectangleF(3f, 8f, 3f, Height - 16f), 1.5f, Theme.AppleBlue);
             }
-            else if (_hovered)
+            else if (_hoverAnim > 0.01f)
             {
-                var hoverFill = _dangerOnHover ? Color.FromArgb(34, 255, 69, 58) : Color.FromArgb(18, 255, 255, 255);
+                var alpha = (int)Math.Round((_dangerOnHover ? 34 : 18) * _hoverAnim);
+                var hoverFill = _dangerOnHover
+                    ? Color.FromArgb(alpha, 255, 69, 58)
+                    : Color.FromArgb(alpha, 255, 255, 255);
                 Theme.FillRounded(g, rect, 8f, hoverFill);
             }
 
             var iconColor = _active
                 ? Theme.Accent
-                : _dangerOnHover && _hovered
-                    ? Color.FromArgb(255, 105, 97)
-                    : Theme.SubText;
+                : _dangerOnHover
+                    ? BlendColor(Theme.SubText, Color.FromArgb(255, 105, 97), _hoverAnim)
+                    : BlendColor(Theme.SubText, Theme.Text, _hoverAnim * 0.65f);
 
             var textColor = _active
                 ? Theme.Text
-                : _dangerOnHover && _hovered
-                    ? Color.FromArgb(255, 145, 138)
-                    : _hovered ? Theme.Text : Theme.SubText;
+                : _dangerOnHover
+                    ? BlendColor(Theme.SubText, Color.FromArgb(255, 145, 138), _hoverAnim)
+                    : BlendColor(Theme.SubText, Theme.Text, _hoverAnim);
 
             Icons.Draw(g, _icon, new RectangleF(13f, (Height - 16f) / 2f, 16f, 16f), iconColor, 1.5f);
             Theme.DrawText(
                 g, _text, _active ? Theme.UiFontBold : Theme.UiFontMedium,
-                new RectangleF(36, 0, Math.Max(10, Width - 42), Height), textColor,
+                new RectangleF(37, 0, Math.Max(10, Width - 43), Height), textColor,
                 StringAlignment.Near, StringAlignment.Center);
         }
     }
@@ -1074,6 +1148,8 @@ public sealed class SettingsForm : Form
             BackColor = Theme.SurfaceCard;
             BorderStyle = BorderStyle.None;
         }
+
+        protected override void OnPaintBackground(PaintEventArgs e) { }
 
         protected override void OnPaint(PaintEventArgs e)
         {
@@ -1111,6 +1187,10 @@ public sealed class SettingsForm : Form
     private sealed class HeroCaptureCard : Panel
     {
         private string _hotkey;
+        private bool _hovered;
+        private bool _pressed;
+        private float _hoverAnim;
+        private readonly System.Windows.Forms.Timer _animTimer;
         public event Action? ActionTriggered;
 
         public HeroCaptureCard(string hotkey)
@@ -1124,7 +1204,31 @@ public sealed class SettingsForm : Form
                 true);
             BackColor = Theme.SurfaceCard;
             Cursor = Cursors.Hand;
+            _animTimer = new System.Windows.Forms.Timer { Interval = 16 };
+            _animTimer.Tick += (_, _) =>
+            {
+                var target = _hovered ? 1f : 0f;
+                var next = _hoverAnim + (target - _hoverAnim) * 0.26f;
+                if (Math.Abs(target - next) < 0.02f)
+                {
+                    _hoverAnim = target;
+                    _animTimer.Stop();
+                }
+                else
+                {
+                    _hoverAnim = next;
+                }
+                Invalidate();
+            };
         }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) _animTimer.Dispose();
+            base.Dispose(disposing);
+        }
+
+        protected override void OnPaintBackground(PaintEventArgs e) { }
 
         public void UpdateHotkey(string hotkey)
         {
@@ -1132,10 +1236,26 @@ public sealed class SettingsForm : Form
             Invalidate();
         }
 
+        protected override void OnMouseEnter(EventArgs e) { base.OnMouseEnter(e); _hovered = true; _animTimer.Start(); }
+        protected override void OnMouseLeave(EventArgs e) { base.OnMouseLeave(e); _hovered = false; _pressed = false; _animTimer.Start(); Invalidate(); }
+
         protected override void OnMouseDown(MouseEventArgs e)
         {
             base.OnMouseDown(e);
             if (e.Button == MouseButtons.Left)
+            {
+                _pressed = true;
+                Invalidate();
+            }
+        }
+
+        protected override void OnMouseUp(MouseEventArgs e)
+        {
+            base.OnMouseUp(e);
+            var trigger = _pressed && e.Button == MouseButtons.Left && ClientRectangle.Contains(e.Location);
+            _pressed = false;
+            Invalidate();
+            if (trigger)
             {
                 ActionTriggered?.Invoke();
             }
@@ -1148,20 +1268,27 @@ public sealed class SettingsForm : Form
             g.Clear(Theme.WindowBack);
 
             var rect = new RectangleF(0.5f, 0.5f, Width - 1f, Height - 1f);
-            Theme.FillRounded(g, rect, 12f, Theme.SurfaceCard);
+            var cardFill = _pressed
+                ? Color.FromArgb(15, 16, 20)
+                : BlendColor(Theme.SurfaceCard, Color.FromArgb(24, 26, 33), _hoverAnim);
+            var cardBorder = BlendColor(
+                Color.FromArgb(52, 10, 132, 255),
+                Color.FromArgb(135, 10, 132, 255),
+                _hoverAnim);
 
-            // İnce Apple mavi üst/sol vurgu çizgisi
-            Theme.DrawRounded(g, rect, 12f, Color.FromArgb(52, 10, 132, 255), 1f);
+            Theme.FillRounded(g, rect, 12f, cardFill);
+            Theme.DrawRounded(g, rect, 12f, cardBorder, 1f);
 
             var iconBox = new RectangleF(18f, 22f, 44f, 44f);
-            Theme.FillRounded(g, iconBox, 10f, Color.FromArgb(28, 10, 132, 255));
+            var boxFill = BlendColor(Color.FromArgb(28, 10, 132, 255), Color.FromArgb(46, 10, 132, 255), _hoverAnim);
+            Theme.FillRounded(g, iconBox, 10f, boxFill);
             Theme.DrawRounded(g, iconBox, 10f, Color.FromArgb(60, 10, 132, 255), 1f);
             Icons.Draw(g, IconKind.Crop, RectangleF.Inflate(iconBox, -11f, -11f), Theme.Accent, 1.8f);
 
             var titleFont = Theme.Ui(11f, FontStyle.Bold);
             Theme.DrawText(
                 g, "Ekran Yakala", titleFont,
-                new RectangleF(76, 18, 220, 24), Theme.Text,
+                new RectangleF(76, 19, 220, 22), Theme.Text,
                 StringAlignment.Near, StringAlignment.Center);
 
             if (!string.IsNullOrWhiteSpace(_hotkey))
@@ -1176,7 +1303,7 @@ public sealed class SettingsForm : Form
 
             Theme.DrawText(
                 g, "Bölge seçin, pencere yakalayın veya düzenleyin", Theme.UiFont,
-                new RectangleF(76, 44, 336, 22), Theme.SubText,
+                new RectangleF(76, 43, 336, 22), Theme.SubText,
                 StringAlignment.Near, StringAlignment.Center);
         }
     }
@@ -1189,6 +1316,8 @@ public sealed class SettingsForm : Form
         private string _hotkey;
         private bool _hovered;
         private bool _pressed;
+        private float _hoverAnim;
+        private readonly System.Windows.Forms.Timer _animTimer;
 
         public BentoTile(IconKind icon, string title, string subtitle, string hotkey)
         {
@@ -1204,7 +1333,31 @@ public sealed class SettingsForm : Form
                 true);
             BackColor = Theme.WindowBack;
             Cursor = Cursors.Hand;
+            _animTimer = new System.Windows.Forms.Timer { Interval = 16 };
+            _animTimer.Tick += (_, _) =>
+            {
+                var target = _hovered ? 1f : 0f;
+                var next = _hoverAnim + (target - _hoverAnim) * 0.26f;
+                if (Math.Abs(target - next) < 0.02f)
+                {
+                    _hoverAnim = target;
+                    _animTimer.Stop();
+                }
+                else
+                {
+                    _hoverAnim = next;
+                }
+                Invalidate();
+            };
         }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) _animTimer.Dispose();
+            base.Dispose(disposing);
+        }
+
+        protected override void OnPaintBackground(PaintEventArgs e) { }
 
         public void UpdateHotkey(string hotkey)
         {
@@ -1212,8 +1365,8 @@ public sealed class SettingsForm : Form
             Invalidate();
         }
 
-        protected override void OnMouseEnter(EventArgs e) { base.OnMouseEnter(e); _hovered = true; Invalidate(); }
-        protected override void OnMouseLeave(EventArgs e) { base.OnMouseLeave(e); _hovered = false; _pressed = false; Invalidate(); }
+        protected override void OnMouseEnter(EventArgs e) { base.OnMouseEnter(e); _hovered = true; _animTimer.Start(); }
+        protected override void OnMouseLeave(EventArgs e) { base.OnMouseLeave(e); _hovered = false; _pressed = false; _animTimer.Start(); Invalidate(); }
         protected override void OnMouseDown(MouseEventArgs e) { base.OnMouseDown(e); if (e.Button == MouseButtons.Left) { _pressed = true; Invalidate(); } }
         protected override void OnMouseUp(MouseEventArgs e) { base.OnMouseUp(e); _pressed = false; Invalidate(); }
 
@@ -1226,20 +1379,20 @@ public sealed class SettingsForm : Form
             var rect = new RectangleF(0.5f, 0.5f, Width - 1f, Height - 1f);
             var fill = _pressed
                 ? Color.FromArgb(14, 14, 17)
-                : _hovered ? Color.FromArgb(24, 25, 31) : Theme.SurfaceCard;
-            var border = _hovered ? Color.FromArgb(46, 255, 255, 255) : Theme.CardBorder;
+                : BlendColor(Theme.SurfaceCard, Color.FromArgb(24, 25, 31), _hoverAnim);
+            var border = BlendColor(Theme.CardBorder, Color.FromArgb(50, 255, 255, 255), _hoverAnim);
 
             Theme.FillRounded(g, rect, 12f, fill);
             Theme.DrawRounded(g, rect, 12f, border, 1f);
 
             var iconBox = new RectangleF(14f, 16f, 32f, 32f);
-            Theme.FillRounded(g, iconBox, 8f, Color.FromArgb(28, 29, 36));
-            Icons.Draw(g, _icon, RectangleF.Inflate(iconBox, -7f, -7f), _hovered ? Theme.Accent : Theme.Text, 1.6f);
+            Theme.FillRounded(g, iconBox, 8f, BlendColor(Color.FromArgb(28, 29, 36), Color.FromArgb(34, 38, 48), _hoverAnim));
+            Icons.Draw(g, _icon, RectangleF.Inflate(iconBox, -7f, -7f), BlendColor(Theme.Text, Theme.Accent, _hoverAnim), 1.6f);
 
             if (!string.IsNullOrWhiteSpace(_hotkey))
             {
                 var badgeW = Theme.MeasureTextWidth(g, _hotkey, Theme.SmallFont) + 14f;
-                var badgeRect = new RectangleF(Width - 14f - badgeW, 18f, badgeW, 20f);
+                var badgeRect = new RectangleF(Width - 14f - badgeW, 17f, badgeW, 20f);
                 Theme.FillRounded(g, badgeRect, 5f, Color.FromArgb(26, 27, 34));
                 Theme.DrawRounded(g, badgeRect, 5f, Color.FromArgb(22, 255, 255, 255), 1f);
                 Theme.DrawText(g, _hotkey, Theme.SmallFont, badgeRect, Theme.SubText, StringAlignment.Center, StringAlignment.Center);
@@ -1247,7 +1400,7 @@ public sealed class SettingsForm : Form
 
             Theme.DrawText(
                 g, _title, Theme.UiFontBold,
-                new RectangleF(56, 15, Width - 125, 20), Theme.Text,
+                new RectangleF(56, 17, Width - 126, 20), Theme.Text,
                 StringAlignment.Near, StringAlignment.Center);
 
             Theme.DrawText(
@@ -1292,6 +1445,8 @@ public sealed class SettingsForm : Form
                 Invalidate();
             }
         }
+
+        protected override void OnPaintBackground(PaintEventArgs e) { }
 
         protected override void OnMouseMove(MouseEventArgs e)
         {
@@ -1363,6 +1518,8 @@ public sealed class SettingsForm : Form
             Cursor = Cursors.Hand;
         }
 
+        protected override void OnPaintBackground(PaintEventArgs e) { }
+
         [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
         public Color Color
         {
@@ -1408,6 +1565,8 @@ public sealed class SettingsForm : Form
             Cursor = Cursors.Hand;
             TabStop = true;
         }
+
+        protected override void OnPaintBackground(PaintEventArgs e) { }
 
         [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
         public string Value

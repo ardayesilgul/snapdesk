@@ -1,4 +1,5 @@
 using System.Drawing.Drawing2D;
+using System.Runtime.InteropServices;
 using SnapDesk.Core;
 using SnapDesk.Editor;
 using SnapDesk.Pin;
@@ -267,9 +268,7 @@ public sealed class SnapDeskApplication
             _settingsForm.BringToFront();
             if (owner is null)
             {
-                var prev = _settingsForm.TopMost;
-                _settingsForm.TopMost = true;
-                _settingsForm.TopMost = prev;
+                SetForegroundWindow(_settingsForm.Handle);
             }
             _settingsForm.Activate();
             return;
@@ -300,8 +299,7 @@ public sealed class SnapDeskApplication
         {
             _settingsForm.Show();
             _settingsForm.BringToFront();
-            _settingsForm.TopMost = true;
-            _settingsForm.TopMost = false;
+            SetForegroundWindow(_settingsForm.Handle);
         }
 
         _settingsForm.Activate();
@@ -333,4 +331,7 @@ public sealed class SnapDeskApplication
 
         Application.Exit();
     }
+
+    [DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
 }
