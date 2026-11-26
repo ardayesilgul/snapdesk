@@ -77,7 +77,35 @@ try {
 } catch {
 }
 
-Write-Host "==> SnapDesk sistem tepsisinde başlatılıyor..." -ForegroundColor Yellow
-Start-Process -FilePath $exePath -ArgumentList "--tray" -WorkingDirectory $outputDir
+$desktopName = "Default"
+try {
+    Add-Type -TypeDefinition '
+    using System;
+    using System.Runtime.InteropServices;
+    using System.Text;
+    public static class SnapDeskWinStation {
+        [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
+        [DllImport("user32.dll")] public static extern IntPtr GetThreadDesktop(uint dwThreadId);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        public static extern bool GetUserObjectInformation(IntPtr hObj, int nIndex, StringBuilder pvInfo, int nLength, out int needed);
+        public static string DesktopName() {
+            int n;
+            var sb = new StringBuilder(256);
+            if (GetUserObjectInformation(GetThreadDesktop(GetCurrentThreadId()), 2, sb, 256, out n)) {
+                return sb.ToString();
+            }
+            return "Default";
+        }
+    }' -ErrorAction SilentlyContinue
+    $desktopName = [SnapDeskWinStation]::DesktopName()
+} catch {
+}
 
-Write-Host "==> Başarılı! Masaüstü ve Başlat Menüsü kısayolları hazır, SnapDesk sistem tepsisinde çalışıyor." -ForegroundColor Green
+if ($desktopName -eq "Default") {
+    Write-Host "==> SnapDesk sistem tepsisinde başlatılıyor..." -ForegroundColor Yellow
+    Start-Process -FilePath $exePath -ArgumentList "--tray" -WorkingDirectory $outputDir
+    Write-Host "==> Başarılı! Masaüstü ve Başlat Menüsü kısayolları hazır, SnapDesk sistem tepsisinde çalışıyor." -ForegroundColor Green
+} else {
+    Write-Host "==> Masaüstü '$desktopName' izole olduğu için otomatik başlatma atlandı; kullanıcı masaüstünden açılabilir." -ForegroundColor Cyan
+    Write-Host "==> Başarılı! Masaüstü ve Başlat Menüsü kısayolları hazır: $desktopPath\SnapDesk.lnk" -ForegroundColor Green
+}

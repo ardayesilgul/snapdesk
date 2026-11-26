@@ -27,9 +27,18 @@ internal static class Program
 
         var quietTray = args.Length > 0 && IsQuietTrayArg(args[0]);
         app.Start(showStartupBalloon: !quietTray);
-        if (args.Length > 0 && !string.IsNullOrWhiteSpace(args[0]) && !quietTray)
+        if (args.Length > 0 && !string.IsNullOrWhiteSpace(args[0]))
         {
-            app.HandleCommand(args[0]);
+            if (!quietTray)
+            {
+                app.HandleCommand(args[0]);
+            }
+        }
+        else
+        {
+            // Masaüstü / Başlat kısayolundan ilk kez açıldığında arayüz görünsün,
+            // ardından sistem tepsisinde hazır beklesin.
+            app.ShowSettings();
         }
         Application.Run(new ApplicationContext());
     }

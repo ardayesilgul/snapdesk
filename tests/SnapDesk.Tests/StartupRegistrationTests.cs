@@ -44,4 +44,14 @@ public class StartupRegistrationTests
         Assert.NotNull(disabled);
         Assert.False(disabled.StartWithWindows);
     }
+
+    [Fact]
+    public void SingleInstance_BuildPipeName_IsolatesDifferentDesktops()
+    {
+        var defaultPipe = SingleInstance.BuildPipeName("Arda", "Default");
+        var sandboxPipe = SingleInstance.BuildPipeName("Arda", "exebox-123");
+
+        Assert.Equal(defaultPipe, SingleInstance.BuildPipeName("Arda", "Default"));
+        Assert.NotEqual(defaultPipe, sandboxPipe);
+    }
 }

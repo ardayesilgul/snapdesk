@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO.Pipes;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -7,9 +8,13 @@ namespace SnapDesk.Core;
 
 /// <summary>
 /// Tek örnek çalışma. İkinci örnek, birinci örneğe komut gönderip kapanır.
+/// Farklı masaüstü bağlamları (örn. izole araç masaüstleri) birbirini kilitlemesin diye
+/// masaüstü adı da anahtara katılır.
 /// </summary>
 public sealed class SingleInstance : IDisposable
 {
+    private const int UoiName = 2;
+
     private readonly Mutex _mutex;
     private readonly string _pipeName;
     private CancellationTokenSource? _cts;
@@ -19,14 +24,52 @@ public sealed class SingleInstance : IDisposable
 
     public event Action<string>? CommandReceived;
 
-    public SingleInstance()
+    public SingleInstance() : this(desktopName: null)
+    {
+    }
+
+    public SingleInstance(string? desktopName)
     {
         var user = Environment.UserName;
-        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(user + "|SnapDesk")))[..12];
-        _pipeName = "SnapDesk-" + hash;
+        var desktop = string.IsNullOrWhiteSpace(desktopName) ? GetCurrentDesktopName() : desktopName.Trim();
+        _pipeName = BuildPipeName(user, desktop);
 
-        _mutex = new Mutex(initiallyOwned: true, "Global\\SnapDesk-" + hash, out var createdNew);
+        _mutex = new Mutex(initiallyOwned: true, "Global\\" + _pipeName, out var createdNew);
         IsFirstInstance = createdNew;
+    }
+
+    public static string BuildPipeName(string user, string desktop)
+    {
+        var hash = Convert.ToHexString(
+            SHA256.HashData(Encoding.UTF8.GetBytes($"{user}|{desktop}|SnapDesk")))[..12];
+        return "SnapDesk-" + hash;
+    }
+
+    public static string GetCurrentDesktopName()
+    {
+        try
+        {
+            var desktop = GetThreadDesktop(GetCurrentThreadId());
+            if (desktop != IntPtr.Zero)
+            {
+                var buffer = new char[256];
+                if (GetUserObjectInformation(desktop, UoiName, buffer, buffer.Length * sizeof(char), out var bytes) && bytes > 0)
+                {
+                    var len = Array.IndexOf(buffer, '\0');
+                    var name = len >= 0 ? new string(buffer, 0, len) : new string(buffer);
+                    if (!string.IsNullOrWhiteSpace(name))
+                    {
+                        return name;
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // Masaüstü adı okunamazsa varsayılana düş.
+        }
+
+        return "Default";
     }
 
     /// <summary>İlk örnekte çağrılır: komut dinleyicisini başlatır.</summary>
@@ -117,4 +160,14 @@ public sealed class SingleInstance : IDisposable
 
         _mutex.Dispose();
     }
+
+    [DllImport("kernel32.dll")]
+    private static extern uint GetCurrentThreadId();
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetThreadDesktop(uint dwThreadId);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern bool GetUserObjectInformation(
+        IntPtr hObj, int nIndex, [Out] char[] pvInfo, int nLength, out int lpnLengthNeeded);
 }
