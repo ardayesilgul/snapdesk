@@ -54,4 +54,12 @@ public class StartupRegistrationTests
         Assert.Equal(defaultPipe, SingleInstance.BuildPipeName("Arda", "Default"));
         Assert.NotEqual(defaultPipe, sandboxPipe);
     }
+
+    [Fact]
+    public void Theme_LoadsEmbeddedInterTypography()
+    {
+        Assert.Equal("Inter", SnapDesk.UI.Theme.UiFont.FontFamily.Name);
+        Assert.Equal("Inter SemiBold", SnapDesk.UI.Theme.TitleFont.FontFamily.Name);
+        Assert.Equal("Inter Medium", SnapDesk.UI.Theme.UiFontMedium.FontFamily.Name);
+    }
 }

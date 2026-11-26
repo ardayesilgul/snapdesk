@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="app.ico" />
+    <EmbeddedResource Include="Assets\Fonts\*.ttf" />
   </ItemGroup>
 
 </Project>

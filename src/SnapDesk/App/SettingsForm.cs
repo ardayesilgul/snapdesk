@@ -157,6 +157,7 @@ public sealed class SettingsForm : Form
             Font = Theme.Ui(11.5f, FontStyle.Bold),
             ForeColor = Theme.Text,
             BackColor = Theme.ToolbarBack,
+            UseCompatibleTextRendering = true,
             AutoSize = true,
             Location = new Point(54, 18),
         };
@@ -166,6 +167,7 @@ public sealed class SettingsForm : Form
             Font = Theme.SmallFont,
             ForeColor = Theme.SubText,
             BackColor = Theme.ToolbarBack,
+            UseCompatibleTextRendering = true,
             AutoSize = true,
             Location = new Point(66, 41),
         };
@@ -271,6 +273,7 @@ public sealed class SettingsForm : Form
             Font = Theme.TitleFont,
             ForeColor = Theme.Text,
             BackColor = Theme.WindowBack,
+            UseCompatibleTextRendering = true,
             AutoSize = true,
             Location = new Point(PageMargin, 22),
         };
@@ -280,6 +283,7 @@ public sealed class SettingsForm : Form
             Font = Theme.SmallFont,
             ForeColor = Theme.SubText,
             BackColor = Theme.WindowBack,
+            UseCompatibleTextRendering = true,
             AutoSize = true,
             Location = new Point(PageMargin, 48),
         };
@@ -358,6 +362,7 @@ public sealed class SettingsForm : Form
             Font = Theme.UiFontBold,
             ForeColor = Theme.Text,
             BackColor = Theme.SurfaceCard,
+            UseCompatibleTextRendering = true,
             AutoSize = true,
             Location = new Point(18, 12),
         };
@@ -367,6 +372,7 @@ public sealed class SettingsForm : Form
             Font = Theme.SmallFont,
             ForeColor = Theme.MutedText,
             BackColor = Theme.SurfaceCard,
+            UseCompatibleTextRendering = true,
             AutoSize = true,
             Location = new Point(18, 33),
         };
@@ -415,6 +421,7 @@ public sealed class SettingsForm : Form
             Font = Theme.SmallFont,
             ForeColor = Theme.MutedText,
             BackColor = Theme.WindowBack,
+            UseCompatibleTextRendering = true,
             AutoSize = true,
             MaximumSize = new Size(CardWidth, 32),
             Location = new Point(PageMargin + 4, 310),
@@ -533,10 +540,10 @@ public sealed class SettingsForm : Form
         format.SelectValue(_settings.ImageFormat);
         fileCard.Controls.Add(format);
 
-        AddRowLabels(fileCard, 18, 115, "Dosya adı kalıbı", "{yyyy}-{MM}-{dd} gibi tarih kalıpları kullanılabilir");
+        AddRowLabels(fileCard, 18, 115, "Dosya adı kalıbı", "Tarih kalıpları: {yyyy}-{MM}-{dd}");
         var pattern = UiFactory.TextBox();
-        pattern.Location = new Point(290, 125);
-        pattern.Width = CardWidth - 25 - 290;
+        pattern.Location = new Point(304, 125);
+        pattern.Width = CardWidth - 25 - 304;
         pattern.Text = _settings.FileNamePattern;
         fileCard.Controls.Add(pattern);
 
@@ -644,6 +651,7 @@ public sealed class SettingsForm : Form
             Font = Theme.SmallFont,
             ForeColor = Theme.MutedText,
             BackColor = Theme.SurfaceCard,
+            UseCompatibleTextRendering = true,
             AutoSize = true,
             Location = new Point(half + 18, 146),
         };
@@ -665,6 +673,7 @@ public sealed class SettingsForm : Form
             Font = Theme.SectionFont,
             ForeColor = Theme.SubText,
             BackColor = Theme.WindowBack,
+            UseCompatibleTextRendering = true,
             AutoSize = true,
             Location = new Point(x + 4, y),
         };
@@ -676,9 +685,10 @@ public sealed class SettingsForm : Form
         var titleLbl = new Label
         {
             Text = title,
-            Font = Theme.UiFont,
+            Font = Theme.UiFontMedium,
             ForeColor = Theme.Text,
             BackColor = Theme.SurfaceCard,
+            UseCompatibleTextRendering = true,
             AutoSize = true,
             Location = new Point(x, y),
         };
@@ -695,6 +705,7 @@ public sealed class SettingsForm : Form
             Font = Theme.SmallFont,
             ForeColor = Theme.MutedText,
             BackColor = Theme.SurfaceCard,
+            UseCompatibleTextRendering = true,
             AutoSize = true,
             Location = new Point(x, y + 18),
         };
@@ -721,6 +732,7 @@ public sealed class SettingsForm : Form
             Font = Theme.UiFont,
             ForeColor = Theme.Text,
             BackColor = Theme.SurfaceCard,
+            UseCompatibleTextRendering = true,
             AutoSize = true,
             Location = new Point(colX + 18, rowTop + 14),
         };
@@ -1052,10 +1064,10 @@ public sealed class SettingsForm : Form
                     : _hovered ? Theme.Text : Theme.SubText;
 
             Icons.Draw(g, _icon, new RectangleF(13f, (Height - 16f) / 2f, 16f, 16f), iconColor, 1.5f);
-            TextRenderer.DrawText(
-                g, _text, _active ? Theme.UiFontBold : Theme.UiFont,
-                new Rectangle(36, 0, Math.Max(10, Width - 42), Height), textColor,
-                TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.SingleLine);
+            Theme.DrawText(
+                g, _text, _active ? Theme.UiFontBold : Theme.UiFontMedium,
+                new RectangleF(36, 0, Math.Max(10, Width - 42), Height), textColor,
+                StringAlignment.Near, StringAlignment.Center);
         }
     }
 
@@ -1162,27 +1174,25 @@ public sealed class SettingsForm : Form
             Icons.Draw(g, IconKind.Crop, RectangleF.Inflate(iconBox, -11f, -11f), Theme.Accent, 1.8f);
 
             var titleFont = Theme.Ui(11f, FontStyle.Bold);
-            TextRenderer.DrawText(
+            Theme.DrawText(
                 g, "Ekran Yakala", titleFont,
-                new Rectangle(76, 18, 220, 24), Theme.Text,
-                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
+                new RectangleF(76, 18, 220, 24), Theme.Text,
+                StringAlignment.Near, StringAlignment.Center);
 
             if (!string.IsNullOrWhiteSpace(_hotkey))
             {
-                var titleW = TextRenderer.MeasureText("Ekran Yakala", titleFont).Width;
-                var badgeW = TextRenderer.MeasureText(_hotkey, Theme.SmallFont).Width + 14;
-                var badgeRect = new RectangleF(76f + titleW + 10f, 20f, badgeW, 20f);
+                var titleW = Theme.MeasureTextWidth(g, "Ekran Yakala", titleFont);
+                var badgeW = Theme.MeasureTextWidth(g, _hotkey, Theme.SmallFont) + 16f;
+                var badgeRect = new RectangleF(76f + titleW + 12f, 20f, badgeW, 20f);
                 Theme.FillRounded(g, badgeRect, 5f, Color.FromArgb(30, 31, 38));
                 Theme.DrawRounded(g, badgeRect, 5f, Color.FromArgb(26, 255, 255, 255), 1f);
-                TextRenderer.DrawText(
-                    g, _hotkey, Theme.SmallFont, Rectangle.Round(badgeRect), Theme.SubText,
-                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
+                Theme.DrawText(g, _hotkey, Theme.SmallFont, badgeRect, Theme.SubText, StringAlignment.Center, StringAlignment.Center);
             }
 
-            TextRenderer.DrawText(
+            Theme.DrawText(
                 g, "Bölge seçin, pencere algılayın veya anında düzenleyin", Theme.UiFont,
-                new Rectangle(76, 44, 326, 22), Theme.SubText,
-                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
+                new RectangleF(76, 44, 326, 22), Theme.SubText,
+                StringAlignment.Near, StringAlignment.Center);
         }
     }
 
@@ -1243,24 +1253,22 @@ public sealed class SettingsForm : Form
 
             if (!string.IsNullOrWhiteSpace(_hotkey))
             {
-                var badgeW = TextRenderer.MeasureText(_hotkey, Theme.SmallFont).Width + 12;
+                var badgeW = Theme.MeasureTextWidth(g, _hotkey, Theme.SmallFont) + 14f;
                 var badgeRect = new RectangleF(Width - 14f - badgeW, 18f, badgeW, 20f);
                 Theme.FillRounded(g, badgeRect, 5f, Color.FromArgb(26, 27, 34));
                 Theme.DrawRounded(g, badgeRect, 5f, Color.FromArgb(22, 255, 255, 255), 1f);
-                TextRenderer.DrawText(
-                    g, _hotkey, Theme.SmallFont, Rectangle.Round(badgeRect), Theme.SubText,
-                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
+                Theme.DrawText(g, _hotkey, Theme.SmallFont, badgeRect, Theme.SubText, StringAlignment.Center, StringAlignment.Center);
             }
 
-            TextRenderer.DrawText(
+            Theme.DrawText(
                 g, _title, Theme.UiFontBold,
-                new Rectangle(56, 15, Width - 125, 20), Theme.Text,
-                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
+                new RectangleF(56, 15, Width - 125, 20), Theme.Text,
+                StringAlignment.Near, StringAlignment.Center);
 
-            TextRenderer.DrawText(
+            Theme.DrawText(
                 g, _subtitle, Theme.SmallFont,
-                new Rectangle(56, 39, Width - 70, 20), Theme.MutedText,
-                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+                new RectangleF(56, 39, Width - 70, 20), Theme.MutedText,
+                StringAlignment.Near, StringAlignment.Center, ellipsis: true);
         }
     }
 
@@ -1341,17 +1349,14 @@ public sealed class SettingsForm : Form
             if (_hoverZone == -1) Theme.FillRounded(g, new RectangleF(1.5f, 1.5f, 29f, Height - 3f), 6f, Theme.Hover);
             else if (_hoverZone == 1) Theme.FillRounded(g, new RectangleF(Width - 30.5f, 1.5f, 29f, Height - 3f), 6f, Theme.Hover);
 
-            TextRenderer.DrawText(g, "−", Theme.UiFontBold, new Rectangle(0, 0, 32, Height),
-                _value > _min ? Theme.Text : Theme.Disabled,
-                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            Theme.DrawText(g, "−", Theme.UiFontBold, new RectangleF(0, 0, 32, Height),
+                _value > _min ? Theme.Text : Theme.Disabled, StringAlignment.Center, StringAlignment.Center);
 
-            TextRenderer.DrawText(g, $"{_value} {_unit}", Theme.UiFont, new Rectangle(32, 0, Width - 64, Height),
-                Theme.Text,
-                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            Theme.DrawText(g, $"{_value} {_unit}", Theme.UiFontMedium, new RectangleF(32, 0, Width - 64, Height),
+                Theme.Text, StringAlignment.Center, StringAlignment.Center);
 
-            TextRenderer.DrawText(g, "+", Theme.UiFontBold, new Rectangle(Width - 32, 0, 32, Height),
-                _value < _max ? Theme.Text : Theme.Disabled,
-                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            Theme.DrawText(g, "+", Theme.UiFontBold, new RectangleF(Width - 32, 0, 32, Height),
+                _value < _max ? Theme.Text : Theme.Disabled, StringAlignment.Center, StringAlignment.Center);
         }
     }
 
@@ -1482,9 +1487,7 @@ public sealed class SettingsForm : Form
                 : _value;
             var textColor = string.IsNullOrWhiteSpace(_value) ? Theme.MutedText : Theme.Text;
 
-            TextRenderer.DrawText(
-                g, display, Font, ClientRectangle, textColor,
-                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
+            Theme.DrawText(g, display, Font, ClientRectangle, textColor, StringAlignment.Center, StringAlignment.Center);
         }
 
         [DllImport("user32.dll")]

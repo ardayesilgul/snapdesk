@@ -28,6 +28,7 @@ public static class UiFactory
         {
             Text = text,
             AutoSize = true,
+            UseCompatibleTextRendering = true,
             ForeColor = small ? Theme.SubText : Theme.Text,
             BackColor = Color.Transparent,
             Font = small ? Theme.SmallFont : Theme.UiFont,
@@ -283,9 +284,7 @@ public static class UiFactory
             {
                 Theme.FillRounded(g, rect, radius, Color.FromArgb(28, 28, 34));
                 Theme.DrawRounded(g, rect, radius, Color.FromArgb(24, 255, 255, 255), 1f);
-                TextRenderer.DrawText(
-                    g, Text, Font, ClientRectangle, Theme.Disabled,
-                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
+                Theme.DrawText(g, Text, Font, ClientRectangle, Theme.Disabled, StringAlignment.Center, StringAlignment.Center);
                 return;
             }
 
@@ -334,9 +333,7 @@ public static class UiFactory
                 }
             }
 
-            TextRenderer.DrawText(
-                g, Text, Font, ClientRectangle, textColor,
-                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
+            Theme.DrawText(g, Text, Font, ClientRectangle, textColor, StringAlignment.Center, StringAlignment.Center);
         }
 
         protected override void Dispose(bool disposing)
@@ -454,11 +451,9 @@ public static class UiFactory
                 Icons.Draw(g, IconKind.Check, iconRect, Color.FromArgb(alpha, Color.White), 1.6f);
             }
 
-            var textRect = new Rectangle(24, 0, Math.Max(10, Width - 24), Height);
+            var textRect = new RectangleF(24, 0, Math.Max(10, Width - 24), Height);
             var textColor = !Enabled ? Theme.Disabled : Theme.Lerp(Theme.Text, Color.White, _hoverAnim * 0.5f);
-            TextRenderer.DrawText(
-                g, Text, Font, textRect, textColor,
-                TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.SingleLine);
+            Theme.DrawText(g, Text, Font, textRect, textColor, StringAlignment.Near, StringAlignment.Center);
         }
 
         protected override void Dispose(bool disposing)
@@ -596,11 +591,11 @@ public static class UiFactory
             Theme.DrawRounded(g, rect, radius, border, DroppedDown || Focused ? 1.3f : 1f);
 
             var displayText = SelectedItem?.ToString() ?? Text ?? string.Empty;
-            var textRect = new Rectangle(10, 0, Math.Max(10, Width - 32), Height);
-            TextRenderer.DrawText(
+            var textRect = new RectangleF(10, 0, Math.Max(10, Width - 32), Height);
+            Theme.DrawText(
                 g, displayText, Font, textRect,
                 Enabled ? Theme.Text : Theme.Disabled,
-                TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
+                StringAlignment.Near, StringAlignment.Center, ellipsis: true);
 
             var cx = Width - 15f;
             var cy = Height / 2f;
@@ -1015,10 +1010,9 @@ public static class UiFactory
                 }
 
                 var color = i == _selectedIndex ? Theme.Text : Theme.SubText;
-                TextRenderer.DrawText(
+                Theme.DrawText(
                     g, _options[i], i == _selectedIndex ? Theme.UiFontBold : Theme.UiFont,
-                    Rectangle.Round(segRect), color,
-                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
+                    segRect, color, StringAlignment.Center, StringAlignment.Center);
             }
         }
     }

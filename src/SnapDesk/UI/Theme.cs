@@ -1,13 +1,18 @@
 using System.Drawing.Drawing2D;
 using System.Drawing.Text;
+using System.Runtime.InteropServices;
 
 namespace SnapDesk.UI;
 
 /// <summary>
-/// Uygulama görsel teması, renk katmanları ve tipografi hiyerarşisi (Apple Obsidian & Linear).
+/// Uygulama görsel teması, renk katmanları ve gömülü Inter tipografi hiyerarşisi (OLED Zinc + Apple).
 /// </summary>
 public static class Theme
 {
+    private static readonly PrivateFontCollection EmbeddedFonts = LoadEmbeddedFonts();
+    private static readonly FontFamily? InterRegularFamily = FindFamily("Inter");
+    private static readonly FontFamily? InterMediumFamily = FindFamily("Inter Medium");
+    private static readonly FontFamily? InterSemiBoldFamily = FindFamily("Inter SemiBold");
     // Katmanlı OLED Zinc yüzey paleti (0 = Tuval, 1 = Sidebar, 2 = Kart, 3 = Girdi, 4 = Hover)
     public static readonly Color WindowBack = Color.FromArgb(8, 9, 10);
     public static readonly Color ToolbarBack = Color.FromArgb(13, 14, 17);
@@ -55,21 +60,128 @@ public static class Theme
     public static readonly Color[] Palette = { Red, Yellow, Green, Blue, Black, White };
 
     public static Font Ui(float size = 9f, FontStyle style = FontStyle.Regular)
-        => new("Segoe UI", size, style, GraphicsUnit.Point);
+    {
+        if (style == FontStyle.Bold)
+        {
+            if (InterSemiBoldFamily is not null)
+            {
+                return new Font(InterSemiBoldFamily, size, FontStyle.Regular, GraphicsUnit.Point);
+            }
+            if (InterRegularFamily is not null)
+            {
+                return new Font(InterRegularFamily, size, FontStyle.Bold, GraphicsUnit.Point);
+            }
+            return new Font("Segoe UI", size, FontStyle.Bold, GraphicsUnit.Point);
+        }
 
-    public static readonly Font TitleFont = new("Segoe UI", 12.5f, FontStyle.Bold, GraphicsUnit.Point);
-    public static readonly Font SectionFont = new("Segoe UI", 9.5f, FontStyle.Bold, GraphicsUnit.Point);
-    public static readonly Font UiFont = new("Segoe UI", 9f, FontStyle.Regular, GraphicsUnit.Point);
-    public static readonly Font UiFontBold = new("Segoe UI", 9f, FontStyle.Bold, GraphicsUnit.Point);
-    public static readonly Font SmallFont = new("Segoe UI", 8.25f, FontStyle.Regular, GraphicsUnit.Point);
+        if (InterRegularFamily is not null)
+        {
+            return new Font(InterRegularFamily, size, style, GraphicsUnit.Point);
+        }
+
+        return new Font("Segoe UI", size, style, GraphicsUnit.Point);
+    }
+
+    public static Font Medium(float size = 9f)
+        => InterMediumFamily is not null
+            ? new Font(InterMediumFamily, size, FontStyle.Regular, GraphicsUnit.Point)
+            : Ui(size);
+
+    public static readonly Font TitleFont = Ui(13.5f, FontStyle.Bold);
+    public static readonly Font SectionFont = Ui(9.5f, FontStyle.Bold);
+    public static readonly Font UiFont = Ui(9f);
+    public static readonly Font UiFontMedium = Medium(9f);
+    public static readonly Font UiFontBold = Ui(9f, FontStyle.Bold);
+    public static readonly Font SmallFont = Ui(8.2f);
     public static readonly Font MonoFont = new("Consolas", 10f, FontStyle.Bold, GraphicsUnit.Point);
 
     public static void Prepare(Graphics g)
     {
         g.SmoothingMode = SmoothingMode.AntiAlias;
-        g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
+        g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
         g.PixelOffsetMode = PixelOffsetMode.HighQuality;
     }
+
+    public static void DrawText(
+        Graphics g,
+        string text,
+        Font font,
+        RectangleF bounds,
+        Color color,
+        StringAlignment horizontal = StringAlignment.Near,
+        StringAlignment vertical = StringAlignment.Center,
+        bool ellipsis = false)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return;
+        }
+
+        g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
+        using var format = new StringFormat(StringFormatFlags.NoWrap)
+        {
+            Alignment = horizontal,
+            LineAlignment = vertical,
+            Trimming = ellipsis ? StringTrimming.EllipsisCharacter : StringTrimming.None,
+        };
+        using var brush = new SolidBrush(color);
+        g.DrawString(text, font, brush, bounds, format);
+    }
+
+    public static float MeasureTextWidth(Graphics g, string text, Font font)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return 0f;
+        }
+
+        using var format = StringFormat.GenericTypographic;
+        return g.MeasureString(text, font, 2000, format).Width;
+    }
+
+    private static FontFamily? FindFamily(string name)
+        => EmbeddedFonts.Families.FirstOrDefault(f => f.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+
+    private static PrivateFontCollection LoadEmbeddedFonts()
+    {
+        var collection = new PrivateFontCollection();
+        var assembly = typeof(Theme).Assembly;
+        var names = assembly.GetManifestResourceNames()
+            .Where(n => n.EndsWith(".ttf", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(n => n, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var resourceName in names)
+        {
+            try
+            {
+                using var stream = assembly.GetManifestResourceStream(resourceName);
+                if (stream is null) continue;
+                var data = new byte[stream.Length];
+                stream.ReadExactly(data);
+
+                var handle = GCHandle.Alloc(data, GCHandleType.Pinned);
+                try
+                {
+                    var ptr = handle.AddrOfPinnedObject();
+                    collection.AddMemoryFont(ptr, data.Length);
+                    _ = AddFontMemResourceEx(ptr, (uint)data.Length, IntPtr.Zero, out _);
+                }
+                finally
+                {
+                    handle.Free();
+                }
+            }
+            catch
+            {
+                // Font yüklenemezse sistem fontuna düş.
+            }
+        }
+
+        return collection;
+    }
+
+    [DllImport("gdi32.dll")]
+    private static extern IntPtr AddFontMemResourceEx(IntPtr pbFont, uint cbFont, IntPtr pdv, out uint pcFonts);
 
     public static Color Lerp(Color from, Color to, float t)
     {
