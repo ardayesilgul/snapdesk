@@ -17,6 +17,12 @@ public static class UiFactory
     public static CheckBox Check(string text, bool @checked = false)
         => new AppleCheckBox(text, @checked);
 
+    public static AppleToggleSwitch Toggle(bool isChecked = false)
+        => new(isChecked);
+
+    public static AppleSegmentedControl Segmented(params string[] options)
+        => new(options);
+
     public static Label Label(string text, bool small = false)
         => new()
         {
@@ -152,7 +158,7 @@ public static class UiFactory
         }
     }
 
-    /// <summary>Windows 10/11 başlık çubuğunu koyu temaya çevirir ve köşe yuvarlatmasını etkinleştirir.</summary>
+    /// <summary>Windows 10/11 başlık çubuğunu koyu OLED temasına uyarlar ve köşe yuvarlatmasını etkinleştirir.</summary>
     private static void ApplyDarkTitleBar(Form form)
     {
         try
@@ -161,6 +167,11 @@ public static class UiFactory
             DwmSetWindowAttribute(form.Handle, 20 /* DWMWA_USE_IMMERSIVE_DARK_MODE */, ref enabled, sizeof(int));
             var cornerPreference = 2; /* DWMWCP_ROUND */
             DwmSetWindowAttribute(form.Handle, 33 /* DWMWA_WINDOW_CORNER_PREFERENCE */, ref cornerPreference, sizeof(int));
+            var c = form.BackColor;
+            var captionColor = c.R | (c.G << 8) | (c.B << 16);
+            DwmSetWindowAttribute(form.Handle, 35 /* DWMWA_CAPTION_COLOR */, ref captionColor, sizeof(int));
+            var borderColor = 0x00262121;
+            DwmSetWindowAttribute(form.Handle, 34 /* DWMWA_BORDER_COLOR */, ref borderColor, sizeof(int));
         }
         catch
         {
@@ -556,46 +567,55 @@ public static class UiFactory
             if (m.Msg == WmPaint)
             {
                 using var g = CreateGraphics();
-                Theme.Prepare(g);
-
-                var bgClear = Parent?.BackColor is { A: 255 } parentBg ? parentBg : Theme.WindowBack;
-                g.Clear(bgClear);
-
-                var rect = new RectangleF(0.5f, 0.5f, Width - 1f, Height - 1f);
-                var radius = 7f;
-                var fill = DroppedDown || _hovered ? Theme.SurfaceHover : Theme.SurfaceInput;
-                var border = DroppedDown || Focused
-                    ? Theme.AppleBlue
-                    : _hovered
-                        ? Color.FromArgb(80, 255, 255, 255)
-                        : Theme.InputBorder;
-
-                Theme.FillRounded(g, rect, radius, fill);
-                Theme.DrawRounded(g, rect, radius, border, DroppedDown || Focused ? 1.3f : 1f);
-
-                var displayText = SelectedItem?.ToString() ?? Text ?? string.Empty;
-                var textRect = new Rectangle(10, 0, Math.Max(10, Width - 32), Height);
-                TextRenderer.DrawText(
-                    g, displayText, Font, textRect,
-                    Enabled ? Theme.Text : Theme.Disabled,
-                    TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
-
-                // Zarif aşağı ok (chevron)
-                var cx = Width - 15f;
-                var cy = Height / 2f;
-                using var chevronPen = new Pen(_hovered || DroppedDown ? Color.White : Theme.SubText, 1.5f)
-                {
-                    StartCap = LineCap.Round,
-                    EndCap = LineCap.Round,
-                    LineJoin = LineJoin.Round,
-                };
-                g.DrawLines(chevronPen, new[]
-                {
-                    new PointF(cx - 4f, cy - 1.5f),
-                    new PointF(cx, cy + 2.5f),
-                    new PointF(cx + 4f, cy - 1.5f),
-                });
+                PaintSurface(g);
             }
+            else if (m.Msg == 0x0318 /* WM_PRINTCLIENT */ && m.WParam != IntPtr.Zero)
+            {
+                using var g = Graphics.FromHdc(m.WParam);
+                PaintSurface(g);
+            }
+        }
+
+        private void PaintSurface(Graphics g)
+        {
+            Theme.Prepare(g);
+
+            var bgClear = Parent?.BackColor is { A: 255 } parentBg ? parentBg : Theme.WindowBack;
+            g.Clear(bgClear);
+
+            var rect = new RectangleF(0.5f, 0.5f, Width - 1f, Height - 1f);
+            var radius = 7f;
+            var fill = DroppedDown || _hovered ? Theme.SurfaceHover : Theme.SurfaceInput;
+            var border = DroppedDown || Focused
+                ? Theme.AppleBlue
+                : _hovered
+                    ? Color.FromArgb(80, 255, 255, 255)
+                    : Theme.InputBorder;
+
+            Theme.FillRounded(g, rect, radius, fill);
+            Theme.DrawRounded(g, rect, radius, border, DroppedDown || Focused ? 1.3f : 1f);
+
+            var displayText = SelectedItem?.ToString() ?? Text ?? string.Empty;
+            var textRect = new Rectangle(10, 0, Math.Max(10, Width - 32), Height);
+            TextRenderer.DrawText(
+                g, displayText, Font, textRect,
+                Enabled ? Theme.Text : Theme.Disabled,
+                TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
+
+            var cx = Width - 15f;
+            var cy = Height / 2f;
+            using var chevronPen = new Pen(_hovered || DroppedDown ? Color.White : Theme.SubText, 1.5f)
+            {
+                StartCap = LineCap.Round,
+                EndCap = LineCap.Round,
+                LineJoin = LineJoin.Round,
+            };
+            g.DrawLines(chevronPen, new[]
+            {
+                new PointF(cx - 4f, cy - 1.5f),
+                new PointF(cx, cy + 2.5f),
+                new PointF(cx + 4f, cy - 1.5f),
+            });
         }
     }
 
@@ -761,6 +781,244 @@ public static class UiFactory
             using (var borderPen = new Pen(Theme.CardBorder, 1f))
             {
                 g.DrawPath(borderPen, path);
+            }
+        }
+    }
+
+    // ----------------------------------------------------------------- AppleToggleSwitch
+
+    public sealed class AppleToggleSwitch : Control
+    {
+        private readonly System.Windows.Forms.Timer _animTimer = new() { Interval = 16 };
+        private float _checkAnim;
+        private float _hoverAnim;
+        private bool _checked;
+        private bool _hovered;
+
+        public event EventHandler? CheckedChanged;
+
+        public AppleToggleSwitch(bool isChecked)
+        {
+            _checked = isChecked;
+            _checkAnim = isChecked ? 1f : 0f;
+            _animTimer.Tick += (_, _) => StepAnimation();
+
+            SetStyle(
+                ControlStyles.AllPaintingInWmPaint |
+                ControlStyles.OptimizedDoubleBuffer |
+                ControlStyles.UserPaint |
+                ControlStyles.ResizeRedraw |
+                ControlStyles.Selectable,
+                true);
+            Size = new Size(40, 22);
+            BackColor = Theme.SurfaceCard;
+            Cursor = Cursors.Hand;
+        }
+
+        [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+        public bool Checked
+        {
+            get => _checked;
+            set
+            {
+                if (_checked == value) return;
+                _checked = value;
+                _animTimer.Start();
+                CheckedChanged?.Invoke(this, EventArgs.Empty);
+            }
+        }
+
+        private void StepAnimation()
+        {
+            var targetCheck = _checked ? 1f : 0f;
+            var targetHover = _hovered && Enabled ? 1f : 0f;
+
+            _checkAnim += (targetCheck - _checkAnim) * 0.34f;
+            _hoverAnim += (targetHover - _hoverAnim) * 0.32f;
+
+            if (Math.Abs(targetCheck - _checkAnim) < 0.01f && Math.Abs(targetHover - _hoverAnim) < 0.01f)
+            {
+                _checkAnim = targetCheck;
+                _hoverAnim = targetHover;
+                _animTimer.Stop();
+            }
+
+            Invalidate();
+        }
+
+        protected override void OnMouseEnter(EventArgs e)
+        {
+            base.OnMouseEnter(e);
+            _hovered = true;
+            _animTimer.Start();
+        }
+
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            base.OnMouseLeave(e);
+            _hovered = false;
+            _animTimer.Start();
+        }
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            base.OnMouseDown(e);
+            if (e.Button == MouseButtons.Left && Enabled)
+            {
+                Focus();
+                Checked = !Checked;
+            }
+        }
+
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            base.OnKeyDown(e);
+            if (e.KeyCode is Keys.Space or Keys.Enter && Enabled)
+            {
+                Checked = !Checked;
+                e.Handled = true;
+            }
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            Theme.Prepare(g);
+            var bgClear = Parent?.BackColor is { A: 255 } parentBg ? parentBg : Theme.SurfaceCard;
+            g.Clear(bgClear);
+
+            var trackRect = new RectangleF(1f, 1f, Width - 2f, Height - 2f);
+            var radius = trackRect.Height / 2f;
+
+            var offTrack = Theme.Lerp(Color.FromArgb(40, 40, 48), Color.FromArgb(52, 52, 62), _hoverAnim);
+            var onTrack = Theme.Lerp(Theme.AppleBlue, Theme.AppleBlueHover, _hoverAnim);
+            var trackFill = Theme.Lerp(offTrack, onTrack, _checkAnim);
+
+            var borderColor = Theme.Lerp(Color.FromArgb(42, 255, 255, 255), Color.FromArgb(80, 255, 255, 255), Math.Max(_checkAnim, _hoverAnim));
+            Theme.FillRounded(g, trackRect, radius, trackFill);
+            Theme.DrawRounded(g, trackRect, radius, borderColor, 1f);
+
+            var knobDiameter = trackRect.Height - 4f;
+            var knobX = trackRect.Left + 2f + (trackRect.Width - 4f - knobDiameter) * _checkAnim;
+            var knobRect = new RectangleF(knobX, trackRect.Top + 2f, knobDiameter, knobDiameter);
+            using var knobBrush = new SolidBrush(Enabled ? Color.White : Color.FromArgb(160, 160, 168));
+            g.FillEllipse(knobBrush, knobRect);
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _animTimer.Stop();
+                _animTimer.Dispose();
+            }
+
+            base.Dispose(disposing);
+        }
+    }
+
+    // ----------------------------------------------------------------- AppleSegmentedControl
+
+    public sealed class AppleSegmentedControl : Control
+    {
+        private readonly string[] _options;
+        private int _selectedIndex;
+        private int _hoverIndex = -1;
+
+        public event EventHandler? SelectedIndexChanged;
+
+        public AppleSegmentedControl(string[] options)
+        {
+            _options = options.Length > 0 ? options : new[] { "Seçenek" };
+            SetStyle(
+                ControlStyles.AllPaintingInWmPaint |
+                ControlStyles.OptimizedDoubleBuffer |
+                ControlStyles.UserPaint |
+                ControlStyles.ResizeRedraw,
+                true);
+            Size = new Size(152, 30);
+            BackColor = Theme.SurfaceCard;
+            Font = Theme.UiFontBold;
+            Cursor = Cursors.Hand;
+        }
+
+        [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+        public int SelectedIndex
+        {
+            get => _selectedIndex;
+            set
+            {
+                var next = Math.Clamp(value, 0, _options.Length - 1);
+                if (_selectedIndex == next) return;
+                _selectedIndex = next;
+                Invalidate();
+                SelectedIndexChanged?.Invoke(this, EventArgs.Empty);
+            }
+        }
+
+        public string SelectedValue => _options[_selectedIndex];
+
+        public void SelectValue(string value)
+        {
+            var idx = Array.FindIndex(_options, o => o.Equals(value, StringComparison.OrdinalIgnoreCase));
+            SelectedIndex = idx >= 0 ? idx : 0;
+        }
+
+        protected override void OnMouseMove(MouseEventArgs e)
+        {
+            base.OnMouseMove(e);
+            var idx = Math.Clamp(e.X * _options.Length / Math.Max(1, Width), 0, _options.Length - 1);
+            if (idx != _hoverIndex)
+            {
+                _hoverIndex = idx;
+                Invalidate();
+            }
+        }
+
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            base.OnMouseLeave(e);
+            _hoverIndex = -1;
+            Invalidate();
+        }
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            base.OnMouseDown(e);
+            if (e.Button != MouseButtons.Left) return;
+            SelectedIndex = Math.Clamp(e.X * _options.Length / Math.Max(1, Width), 0, _options.Length - 1);
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            Theme.Prepare(g);
+            var bgClear = Parent?.BackColor is { A: 255 } parentBg ? parentBg : Theme.SurfaceCard;
+            g.Clear(bgClear);
+
+            var outer = new RectangleF(0.5f, 0.5f, Width - 1f, Height - 1f);
+            Theme.FillRounded(g, outer, 8f, Theme.WindowBack);
+            Theme.DrawRounded(g, outer, 8f, Theme.InputBorder, 1f);
+
+            var segWidth = (Width - 6f) / _options.Length;
+            for (var i = 0; i < _options.Length; i++)
+            {
+                var segRect = new RectangleF(3f + i * segWidth, 3f, segWidth, Height - 6f);
+                if (i == _selectedIndex)
+                {
+                    Theme.FillRounded(g, segRect, 6f, Color.FromArgb(44, 45, 54));
+                    Theme.DrawRounded(g, segRect, 6f, Color.FromArgb(40, 255, 255, 255), 1f);
+                }
+                else if (i == _hoverIndex)
+                {
+                    Theme.FillRounded(g, segRect, 6f, Color.FromArgb(20, 255, 255, 255));
+                }
+
+                var color = i == _selectedIndex ? Theme.Text : Theme.SubText;
+                TextRenderer.DrawText(
+                    g, _options[i], i == _selectedIndex ? Theme.UiFontBold : Theme.UiFont,
+                    Rectangle.Round(segRect), color,
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
             }
         }
     }

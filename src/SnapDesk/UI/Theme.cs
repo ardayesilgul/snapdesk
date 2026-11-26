@@ -8,23 +8,23 @@ namespace SnapDesk.UI;
 /// </summary>
 public static class Theme
 {
-    // Katmanlı yüzey paleti (Derinlik hiyerarşisi: 0 = Pencere, 1 = Kart, 2 = Girdi/Kontrol, 3 = Hover)
-    public static readonly Color WindowBack = Color.FromArgb(18, 18, 22);
-    public static readonly Color ToolbarBack = Color.FromArgb(22, 22, 26);
-    public static readonly Color SurfaceCard = Color.FromArgb(27, 27, 33);
-    public static readonly Color ToolbarBackAlt = Color.FromArgb(34, 34, 42);
-    public static readonly Color SurfaceInput = Color.FromArgb(34, 34, 42);
-    public static readonly Color SurfaceHover = Color.FromArgb(46, 46, 56);
+    // Katmanlı OLED Zinc yüzey paleti (0 = Tuval, 1 = Sidebar, 2 = Kart, 3 = Girdi, 4 = Hover)
+    public static readonly Color WindowBack = Color.FromArgb(8, 9, 10);
+    public static readonly Color ToolbarBack = Color.FromArgb(13, 14, 17);
+    public static readonly Color SurfaceCard = Color.FromArgb(17, 17, 19);
+    public static readonly Color ToolbarBackAlt = Color.FromArgb(24, 24, 29);
+    public static readonly Color SurfaceInput = Color.FromArgb(24, 24, 29);
+    public static readonly Color SurfaceHover = Color.FromArgb(34, 34, 41);
 
     // Kenarlıklar ve speküler ışık katmanları
-    public static readonly Color ToolbarBorder = Color.FromArgb(48, 255, 255, 255);
-    public static readonly Color CardBorder = Color.FromArgb(26, 255, 255, 255);
-    public static readonly Color InputBorder = Color.FromArgb(44, 255, 255, 255);
-    public static readonly Color SpecularTop = Color.FromArgb(36, 255, 255, 255);
-    public static readonly Color DividerLine = Color.FromArgb(20, 255, 255, 255);
+    public static readonly Color ToolbarBorder = Color.FromArgb(40, 255, 255, 255);
+    public static readonly Color CardBorder = Color.FromArgb(20, 255, 255, 255);
+    public static readonly Color InputBorder = Color.FromArgb(34, 255, 255, 255);
+    public static readonly Color SpecularTop = Color.FromArgb(30, 255, 255, 255);
+    public static readonly Color DividerLine = Color.FromArgb(18, 255, 255, 255);
 
     // Etkileşim durumları
-    public static readonly Color Hover = Color.FromArgb(34, 255, 255, 255);
+    public static readonly Color Hover = Color.FromArgb(28, 255, 255, 255);
     public static readonly Color Active = Color.FromArgb(0, 122, 255);
     public static readonly Color Accent = Color.FromArgb(10, 132, 255);
     public static readonly Color AppleBlue = Color.FromArgb(0, 122, 255);
@@ -33,10 +33,10 @@ public static class Theme
     public static readonly Color AppleRedHover = Color.FromArgb(64, 255, 69, 58);
 
     // Metin hiyerarşisi
-    public static readonly Color Text = Color.FromArgb(245, 245, 247);
-    public static readonly Color SubText = Color.FromArgb(156, 156, 168);
-    public static readonly Color MutedText = Color.FromArgb(112, 112, 124);
-    public static readonly Color Disabled = Color.FromArgb(88, 88, 96);
+    public static readonly Color Text = Color.FromArgb(244, 244, 245);
+    public static readonly Color SubText = Color.FromArgb(161, 161, 170);
+    public static readonly Color MutedText = Color.FromArgb(113, 113, 122);
+    public static readonly Color Disabled = Color.FromArgb(82, 82, 91);
 
     // Yakalama ve çizim renkleri
     public static readonly Color SelectionBorder = Color.FromArgb(64, 140, 255);
@@ -122,7 +122,7 @@ public static class Theme
         Prepare(g);
         var rect = new RectangleF(0.5f, 0.5f, width - 1f, height - 1f);
         using var path = RoundedRect(rect, cornerRadius);
-        using (var backBrush = new SolidBrush(Color.FromArgb(248, 22, 22, 26)))
+        using (var backBrush = new SolidBrush(Color.FromArgb(248, 16, 17, 20)))
         {
             g.FillPath(backBrush, path);
         }
