@@ -626,7 +626,7 @@ public sealed class SettingsForm : Form
             return titleLbl;
         }
 
-        var subLbl = MakeLabel(subtitle, Theme.SmallFont, Theme.MutedText, Theme.SurfaceCard, x, y + 18);
+        var subLbl = MakeLabel(subtitle, Theme.SmallFont, Theme.MutedText, Theme.SurfaceCard, x, y + 19);
         card.Controls.Add(subLbl);
         return subLbl;
     }
@@ -1124,7 +1124,7 @@ public sealed class SettingsForm : Form
 
             Icons.Draw(g, _icon, new RectangleF(13f, (Height - 16f) / 2f, 16f, 16f), iconColor, 1.5f);
             Theme.DrawText(
-                g, _text, _active ? Theme.UiFontBold : Theme.UiFontMedium,
+                g, _text, _active ? Theme.UiFontBold : Theme.UiFont,
                 new RectangleF(37, 0, Math.Max(10, Width - 43), Height), textColor,
                 StringAlignment.Near, StringAlignment.Center);
         }
@@ -1385,27 +1385,29 @@ public sealed class SettingsForm : Form
             Theme.FillRounded(g, rect, 12f, fill);
             Theme.DrawRounded(g, rect, 12f, border, 1f);
 
-            var iconBox = new RectangleF(14f, 16f, 32f, 32f);
-            Theme.FillRounded(g, iconBox, 8f, BlendColor(Color.FromArgb(28, 29, 36), Color.FromArgb(34, 38, 48), _hoverAnim));
-            Icons.Draw(g, _icon, RectangleF.Inflate(iconBox, -7f, -7f), BlendColor(Theme.Text, Theme.Accent, _hoverAnim), 1.6f);
+            var iconBox = new RectangleF(16f, (Height - 38f) / 2f, 38f, 38f);
+            Theme.FillRounded(g, iconBox, 10f, BlendColor(Color.FromArgb(28, 29, 36), Color.FromArgb(34, 38, 48), _hoverAnim));
+            Icons.Draw(g, _icon, RectangleF.Inflate(iconBox, -9f, -9f), BlendColor(Theme.Text, Theme.Accent, _hoverAnim), 1.65f);
 
+            var titleRight = Width - 16f;
             if (!string.IsNullOrWhiteSpace(_hotkey))
             {
                 var badgeW = Theme.MeasureTextWidth(g, _hotkey, Theme.SmallFont) + 14f;
-                var badgeRect = new RectangleF(Width - 14f - badgeW, 17f, badgeW, 20f);
+                var badgeRect = new RectangleF(Width - 16f - badgeW, 19f, badgeW, 20f);
                 Theme.FillRounded(g, badgeRect, 5f, Color.FromArgb(26, 27, 34));
                 Theme.DrawRounded(g, badgeRect, 5f, Color.FromArgb(22, 255, 255, 255), 1f);
                 Theme.DrawText(g, _hotkey, Theme.SmallFont, badgeRect, Theme.SubText, StringAlignment.Center, StringAlignment.Center);
+                titleRight = badgeRect.Left - 8f;
             }
 
             Theme.DrawText(
-                g, _title, Theme.UiFontBold,
-                new RectangleF(56, 17, Width - 126, 20), Theme.Text,
+                g, _title, Theme.Ui(10f, FontStyle.Bold),
+                new RectangleF(66f, 18f, Math.Max(40f, titleRight - 66f), 22f), Theme.Text,
                 StringAlignment.Near, StringAlignment.Center);
 
             Theme.DrawText(
                 g, _subtitle, Theme.SmallFont,
-                new RectangleF(56, 39, Width - 70, 20), Theme.MutedText,
+                new RectangleF(66f, 41f, Width - 82f, 20f), Color.FromArgb(148, 148, 158),
                 StringAlignment.Near, StringAlignment.Center, ellipsis: true);
         }
     }

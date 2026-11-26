@@ -4,16 +4,16 @@ using System.Drawing.Text;
 namespace SnapDesk.UI;
 
 /// <summary>
-/// Uygulama görsel teması, OLED Zinc renk paleti ve Windows 11 Segoe UI Variable ClearType tipografisi.
+/// Uygulama görsel teması, OLED Zinc renk paleti ve Windows ClearType Segoe UI tipografisi.
 /// </summary>
 public static class Theme
 {
     private static readonly HashSet<string> InstalledFamilies = LoadInstalledFamilyNames();
 
-    private static readonly string TextFamily = PickFamily("Segoe UI Variable Text", "Segoe UI");
-    private static readonly string MediumFamily = PickFamily("Segoe UI Variable Display", "Segoe UI Variable Text", "Segoe UI");
-    private static readonly string SemiBoldFamily = PickFamily("Segoe UI Variable Text Semibold", "Segoe UI Semibold", "Segoe UI");
-    private static readonly string DisplaySemiBoldFamily = PickFamily("Segoe UI Variable Display Semib", "Segoe UI Variable Text Semibold", "Segoe UI Semibold", "Segoe UI");
+    private static readonly string TextFamily = PickFamily("Segoe UI");
+    private static readonly string MediumFamily = PickFamily("Segoe UI Semibold", "Segoe UI");
+    private static readonly string SemiBoldFamily = PickFamily("Segoe UI Semibold", "Segoe UI");
+    private static readonly string DisplaySemiBoldFamily = PickFamily("Segoe UI Semibold", "Segoe UI");
 
     // Katmanlı OLED Zinc yüzey paleti (0 = Tuval, 1 = Sidebar, 2 = Kart, 3 = Girdi, 4 = Hover)
     public static readonly Color WindowBack = Color.FromArgb(8, 9, 10);
@@ -75,12 +75,12 @@ public static class Theme
     public static Font Medium(float size = 9.5f)
         => new(MediumFamily, size, FontStyle.Regular, GraphicsUnit.Point);
 
-    public static readonly Font TitleFont = Ui(14.5f, FontStyle.Bold);
+    public static readonly Font TitleFont = Ui(15f, FontStyle.Bold);
     public static readonly Font SectionFont = Ui(9.5f, FontStyle.Bold);
     public static readonly Font UiFont = Ui(9.5f);
     public static readonly Font UiFontMedium = Medium(9.5f);
     public static readonly Font UiFontBold = Ui(9.5f, FontStyle.Bold);
-    public static readonly Font SmallFont = Ui(8.5f);
+    public static readonly Font SmallFont = Ui(9f);
     public static readonly Font MonoFont = new("Consolas", 10f, FontStyle.Bold, GraphicsUnit.Point);
 
     public static void Prepare(Graphics g)
