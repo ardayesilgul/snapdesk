@@ -271,7 +271,7 @@ public sealed class PinForm : Form
             Font = Theme.UiFont,
         };
 
-        menu.Items.Add(Item("Metni tanı (E)", () => OcrForm.ShowFor(new Bitmap(_image), Location, _settings, this)));
+        menu.Items.Add(Item("Metni çıkart (E)", () => OcrForm.ShowFor(new Bitmap(_image), Location, _settings, this)));
         menu.Items.Add(Item("Resmi kopyala (Ctrl+C)", CopyImage));
         menu.Items.Add(Item("Resmi kaydet (Ctrl+S)", SaveImage));
         menu.Items.Add(Item("İşaretle (Space)", Annotate));

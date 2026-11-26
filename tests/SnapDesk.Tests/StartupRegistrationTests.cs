@@ -56,10 +56,10 @@ public class StartupRegistrationTests
     }
 
     [Fact]
-    public void Theme_LoadsEmbeddedInterTypography()
+    public void Theme_LoadsEmbeddedGeistTypography()
     {
-        Assert.Equal("Inter", SnapDesk.UI.Theme.UiFont.FontFamily.Name);
-        Assert.Equal("Inter SemiBold", SnapDesk.UI.Theme.TitleFont.FontFamily.Name);
-        Assert.Equal("Inter Medium", SnapDesk.UI.Theme.UiFontMedium.FontFamily.Name);
+        Assert.Equal("Geist", SnapDesk.UI.Theme.UiFont.FontFamily.Name);
+        Assert.Equal("Geist SemiBold", SnapDesk.UI.Theme.TitleFont.FontFamily.Name);
+        Assert.Equal("Geist Medium", SnapDesk.UI.Theme.UiFontMedium.FontFamily.Name);
     }
 }

@@ -433,7 +433,7 @@ public sealed partial class CaptureSession : IDisposable
         }
         catch (Exception ex)
         {
-            ShowError("Metin tanıma başlatılamadı", ex);
+            ShowError("Metin çıkartma başlatılamadı", ex);
         }
     }
 

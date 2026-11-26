@@ -23,10 +23,14 @@ public sealed class SettingsForm : Form
     private readonly Settings _settings;
 
     private readonly Panel _sidebar;
+    private readonly Panel _headerBar;
+    private readonly Label _headerTitle;
+    private readonly Label _headerSubtitle;
     private readonly Panel _viewport;
     private readonly Panel _footer;
     private readonly List<SidebarTab> _tabs = new();
     private readonly List<Panel> _pages = new();
+    private readonly List<(string Title, string Subtitle)> _pageHeaders = new();
 
     private readonly HotkeyBox _capture;
     private readonly HotkeyBox _pin;
@@ -82,14 +86,30 @@ public sealed class SettingsForm : Form
 
         _sidebar = BuildSidebar();
         _footer = BuildFooter();
-        _viewport = new Panel
+        _headerBar = new Panel
         {
             Location = new Point(SidebarWidth, 0),
-            Size = new Size(ContentWidth, BodyHeight),
+            Size = new Size(ContentWidth, 76),
+            BackColor = Theme.WindowBack,
+        };
+        _headerTitle = MakeLabel(string.Empty, Theme.TitleFont, Theme.Text, Theme.WindowBack, PageMargin, 20);
+        _headerSubtitle = MakeLabel(string.Empty, Theme.SmallFont, Theme.SubText, Theme.WindowBack, PageMargin, 48);
+        var lifecyclePill = new TrayLifecyclePill();
+        lifecyclePill.Location = new Point(ContentWidth - PageMargin - lifecyclePill.Width, 21);
+        lifecyclePill.ExitClicked += () => _app.Exit();
+        _headerBar.Controls.Add(_headerTitle);
+        _headerBar.Controls.Add(_headerSubtitle);
+        _headerBar.Controls.Add(lifecyclePill);
+
+        _viewport = new Panel
+        {
+            Location = new Point(SidebarWidth, 76),
+            Size = new Size(ContentWidth, BodyHeight - 76),
             BackColor = Theme.WindowBack,
         };
 
         Controls.Add(_sidebar);
+        Controls.Add(_headerBar);
         Controls.Add(_viewport);
         Controls.Add(_footer);
 
@@ -100,7 +120,7 @@ public sealed class SettingsForm : Form
         var shortcutsPage = CreatePage("Kısayollar", "Her yerden çalışan global klavye kısayollarını düzenleyin.");
         (_capture, _pin, _long, _record, _hotkeyStatus) = BuildShortcutsPage(shortcutsPage);
 
-        var behaviorPage = CreatePage("Yakalama ve OCR", "Başlangıç davranışı, yakalama yardımcıları ve çevrimdışı metin tanıma.");
+        var behaviorPage = CreatePage("Yakalama ve Metni Çıkart", "Başlangıç davranışı, yakalama yardımcıları ve çevrimdışı OCR.");
         (_startWithWindows, _magnifier, _confirmEscape, _copyOnCapture, _ocrLanguage, _ocrInfo, _autoCopyOcr) =
             BuildBehaviorOcrPage(behaviorPage);
 
@@ -135,9 +155,6 @@ public sealed class SettingsForm : Form
             using var divPen = new Pen(Color.FromArgb(24, 255, 255, 255), 1f);
             g.DrawLine(divPen, sidebar.Width - 1, 0, sidebar.Width - 1, sidebar.Height);
 
-            // Alt çıkış düğmesi üstü ayırıcı
-            g.DrawLine(divPen, 14, BodyHeight, sidebar.Width - 15, BodyHeight);
-
             // Marka ikonu (gömülü app.ico)
             var iconRect = new Rectangle(18, 22, 28, 28);
             if (Icon is not null)
@@ -145,32 +162,10 @@ public sealed class SettingsForm : Form
                 g.InterpolationMode = InterpolationMode.HighQualityBicubic;
                 g.DrawIcon(Icon, iconRect);
             }
-
-            // Canlı yeşil tepsi durumu noktası
-            using var dotBrush = new SolidBrush(Color.FromArgb(48, 209, 88));
-            g.FillEllipse(dotBrush, 56f, 46f, 6f, 6f);
         };
 
-        var brandTitle = new Label
-        {
-            Text = "SnapDesk",
-            Font = Theme.Ui(11.5f, FontStyle.Bold),
-            ForeColor = Theme.Text,
-            BackColor = Theme.ToolbarBack,
-            UseCompatibleTextRendering = true,
-            AutoSize = true,
-            Location = new Point(54, 18),
-        };
-        var brandState = new Label
-        {
-            Text = "Tepside hazır",
-            Font = Theme.SmallFont,
-            ForeColor = Theme.SubText,
-            BackColor = Theme.ToolbarBack,
-            UseCompatibleTextRendering = true,
-            AutoSize = true,
-            Location = new Point(66, 41),
-        };
+        var brandTitle = MakeLabel("SnapDesk", Theme.Ui(11.5f, FontStyle.Bold), Theme.Text, Theme.ToolbarBack, 54, 18);
+        var brandState = MakeLabel("Ekran Aracı", Theme.SmallFont, Theme.MutedText, Theme.ToolbarBack, 54, 41);
         sidebar.Controls.Add(brandTitle);
         sidebar.Controls.Add(brandState);
 
@@ -198,13 +193,8 @@ public sealed class SettingsForm : Form
             y += 42;
         }
 
-        var exitTab = new SidebarTab("Uygulamadan çık", IconKind.Close, dangerOnHover: true)
-        {
-            Location = new Point(12, BodyHeight + 16),
-            Size = new Size(SidebarWidth - 25, 36),
-        };
-        exitTab.Click += (_, _) => _app.Exit();
-        sidebar.Controls.Add(exitTab);
+        var versionNote = MakeLabel("v0.9.0 · Çevrimdışı", Theme.SmallFont, Theme.MutedText, Theme.ToolbarBack, 20, BodyHeight + 25);
+        sidebar.Controls.Add(versionNote);
 
         return sidebar;
     }
@@ -255,6 +245,12 @@ public sealed class SettingsForm : Form
             _tabs[i].Active = active;
             _pages[i].Visible = active;
         }
+
+        if (index >= 0 && index < _pageHeaders.Count)
+        {
+            _headerTitle.Text = _pageHeaders[index].Title;
+            _headerSubtitle.Text = _pageHeaders[index].Subtitle;
+        }
     }
 
     private Panel CreatePage(string title, string subtitle)
@@ -262,34 +258,13 @@ public sealed class SettingsForm : Form
         var page = new Panel
         {
             Location = new Point(0, 0),
-            Size = new Size(ContentWidth, BodyHeight),
+            Size = new Size(ContentWidth, BodyHeight - 76),
             BackColor = Theme.WindowBack,
             Visible = false,
+            Padding = new Padding(0),
         };
 
-        var heading = new Label
-        {
-            Text = title,
-            Font = Theme.TitleFont,
-            ForeColor = Theme.Text,
-            BackColor = Theme.WindowBack,
-            UseCompatibleTextRendering = true,
-            AutoSize = true,
-            Location = new Point(PageMargin, 22),
-        };
-        var sub = new Label
-        {
-            Text = subtitle,
-            Font = Theme.SmallFont,
-            ForeColor = Theme.SubText,
-            BackColor = Theme.WindowBack,
-            UseCompatibleTextRendering = true,
-            AutoSize = true,
-            Location = new Point(PageMargin, 48),
-        };
-
-        page.Controls.Add(heading);
-        page.Controls.Add(sub);
+        _pageHeaders.Add((title, subtitle));
         _pages.Add(page);
         _viewport.Controls.Add(page);
         return page;
@@ -301,7 +276,7 @@ public sealed class SettingsForm : Form
     {
         _heroCard = new HeroCaptureCard(_settings.CaptureHotkey)
         {
-            Location = new Point(PageMargin, 78),
+            Location = new Point(PageMargin, 4),
             Size = new Size(CardWidth, 88),
         };
         _heroCard.ActionTriggered += () => TriggerCaptureFromUi(CaptureIntent.Edit);
@@ -319,28 +294,28 @@ public sealed class SettingsForm : Form
 
         _pinTile = new BentoTile(IconKind.Pin, "Sabitle", "Seçimi ekranda en üstte tut", _settings.PinHotkey)
         {
-            Location = new Point(PageMargin, 180),
+            Location = new Point(PageMargin, 106),
             Size = new Size(tileW, tileH),
         };
         _pinTile.Click += (_, _) => TriggerCaptureFromUi(CaptureIntent.Pin);
 
         _longTile = new BentoTile(IconKind.LongCapture, "Uzun Yakalama", "Kaydırmalı dikey sayfa birleştirme", _settings.LongCaptureHotkey)
         {
-            Location = new Point(PageMargin + tileW + gap, 180),
+            Location = new Point(PageMargin + tileW + gap, 106),
             Size = new Size(tileW, tileH),
         };
         _longTile.Click += (_, _) => TriggerCaptureFromUi(CaptureIntent.LongCapture);
 
         _recordTile = new BentoTile(IconKind.Video, "Video Kaydı", "Seçili bölgeyi MP4 / GIF kaydet", _settings.RecordHotkey)
         {
-            Location = new Point(PageMargin, 180 + tileH + gap),
+            Location = new Point(PageMargin, 106 + tileH + gap),
             Size = new Size(tileW, tileH),
         };
         _recordTile.Click += (_, _) => TriggerCaptureFromUi(CaptureIntent.Record);
 
-        var ocrTile = new BentoTile(IconKind.Ocr, "Metin Tanı (OCR)", "Çevrimdışı metin seç ve kopyala", "Shift+C")
+        var ocrTile = new BentoTile(IconKind.Ocr, "Metni Çıkart", "Görseldeki metni seç ve kopyala", "Shift+C")
         {
-            Location = new Point(PageMargin + tileW + gap, 180 + tileH + gap),
+            Location = new Point(PageMargin + tileW + gap, 106 + tileH + gap),
             Size = new Size(tileW, tileH),
         };
         ocrTile.Click += (_, _) => TriggerCaptureFromUi(CaptureIntent.Ocr);
@@ -352,30 +327,12 @@ public sealed class SettingsForm : Form
 
         var pinBar = new GroupedCard(Array.Empty<int>())
         {
-            Location = new Point(PageMargin, 370),
+            Location = new Point(PageMargin, 296),
             Size = new Size(CardWidth, 64),
         };
 
-        var pinTitle = new Label
-        {
-            Text = "Ekran Pinleri",
-            Font = Theme.UiFontBold,
-            ForeColor = Theme.Text,
-            BackColor = Theme.SurfaceCard,
-            UseCompatibleTextRendering = true,
-            AutoSize = true,
-            Location = new Point(18, 12),
-        };
-        var pinHint = new Label
-        {
-            Text = "Tepside sol tık yakalar · sağ tık arayüzü açar",
-            Font = Theme.SmallFont,
-            ForeColor = Theme.MutedText,
-            BackColor = Theme.SurfaceCard,
-            UseCompatibleTextRendering = true,
-            AutoSize = true,
-            Location = new Point(18, 33),
-        };
+        var pinTitle = MakeLabel("Ekran Pinleri", Theme.UiFontBold, Theme.Text, Theme.SurfaceCard, 18, 12);
+        var pinHint = MakeLabel("Sol tık tepsi: yakala · Sağ tık: arayüz", Theme.SmallFont, Theme.MutedText, Theme.SurfaceCard, 18, 33);
         pinBar.Controls.Add(pinTitle);
         pinBar.Controls.Add(pinHint);
 
@@ -406,7 +363,7 @@ public sealed class SettingsForm : Form
     {
         var card = new GroupedCard(new[] { 54, 54, 54 })
         {
-            Location = new Point(PageMargin, 78),
+            Location = new Point(PageMargin, 4),
             Size = new Size(CardWidth, 216),
         };
 
@@ -415,17 +372,8 @@ public sealed class SettingsForm : Form
         var longCap = AddHotkeyRow(card, 108, "Uzun yakalama", "Kaydırmalı belge ve sayfa birleştirme", _settings.LongCaptureHotkey, Settings.DefaultLongHotkey);
         var record = AddHotkeyRow(card, 162, "Video kayıt", "Seçili alanda MP4 / GIF kayıt çubuğu", _settings.RecordHotkey, Settings.DefaultRecordHotkey);
 
-        var status = new Label
-        {
-            Text = "Tüm kısayollar etkin.",
-            Font = Theme.SmallFont,
-            ForeColor = Theme.MutedText,
-            BackColor = Theme.WindowBack,
-            UseCompatibleTextRendering = true,
-            AutoSize = true,
-            MaximumSize = new Size(CardWidth, 32),
-            Location = new Point(PageMargin + 4, 310),
-        };
+        var status = MakeLabel("Tüm kısayollar etkin.", Theme.SmallFont, Theme.MutedText, Theme.WindowBack, PageMargin + 4, 236);
+        status.MaximumSize = new Size(CardWidth, 32);
 
         page.Controls.Add(card);
         page.Controls.Add(status);
@@ -467,11 +415,11 @@ public sealed class SettingsForm : Form
         UiFactory.AppleToggleSwitch AutoCopyOcr)
         BuildBehaviorOcrPage(Panel page)
     {
-        AddSectionCaption(page, "Davranış", PageMargin, 76);
+        AddSectionCaption(page, "Davranış", PageMargin, 2);
 
         var behaviorCard = new GroupedCard(new[] { 46, 46, 46 })
         {
-            Location = new Point(PageMargin, 98),
+            Location = new Point(PageMargin, 24),
             Size = new Size(CardWidth, 184),
         };
 
@@ -480,11 +428,11 @@ public sealed class SettingsForm : Form
         var confirmEscape = AddToggleRow(behaviorCard, 92, 46, "Çıkışta onay iste", "Üzerinde çizim varken Esc ile kapatırken uyar", _settings.ConfirmOnEscape);
         var copyOnCapture = AddToggleRow(behaviorCard, 138, 46, "Panoya otomatik kopyala", "Bölge seçildiği anda görseli panoya aktar", _settings.CopyToClipboardOnCapture);
 
-        AddSectionCaption(page, "Metin Tanıma (OCR)", PageMargin, 300);
+        AddSectionCaption(page, "Metni Çıkart (OCR)", PageMargin, 226);
 
         var ocrCard = new GroupedCard(new[] { 54 })
         {
-            Location = new Point(PageMargin, 322),
+            Location = new Point(PageMargin, 248),
             Size = new Size(CardWidth, 102),
         };
 
@@ -514,11 +462,11 @@ public sealed class SettingsForm : Form
         UiFactory.AppleToggleSwitch Cursor)
         BuildOutputPage(Panel page)
     {
-        AddSectionCaption(page, "Dosya ve Biçim", PageMargin, 76);
+        AddSectionCaption(page, "Dosya ve Biçim", PageMargin, 2);
 
         var fileCard = new GroupedCard(new[] { 52, 52 })
         {
-            Location = new Point(PageMargin, 98),
+            Location = new Point(PageMargin, 24),
             Size = new Size(CardWidth, 166),
         };
 
@@ -547,11 +495,11 @@ public sealed class SettingsForm : Form
         pattern.Text = _settings.FileNamePattern;
         fileCard.Controls.Add(pattern);
 
-        AddSectionCaption(page, "Video Kaydı", PageMargin, 282);
+        AddSectionCaption(page, "Video Kaydı", PageMargin, 208);
 
         var videoCard = new GroupedCard(new[] { 52 })
         {
-            Location = new Point(PageMargin, 304),
+            Location = new Point(PageMargin, 230),
             Size = new Size(CardWidth, 100),
         };
 
@@ -586,11 +534,11 @@ public sealed class SettingsForm : Form
         UiFactory.AppleToggleSwitch BarPin)
         BuildAppearancePage(Panel page)
     {
-        AddSectionCaption(page, "Çizim Varsayılanları", PageMargin, 76);
+        AddSectionCaption(page, "Çizim Varsayılanları", PageMargin, 2);
 
         var drawCard = new GroupedCard(new[] { 56 }, verticalSplitX: CardWidth / 2)
         {
-            Location = new Point(PageMargin, 98),
+            Location = new Point(PageMargin, 24),
             Size = new Size(CardWidth, 112),
         };
 
@@ -628,11 +576,11 @@ public sealed class SettingsForm : Form
         };
         drawCard.Controls.Add(block);
 
-        AddSectionCaption(page, "Yüzen Araç Çubuğu (Dinamik Ada)", PageMargin, 228);
+        AddSectionCaption(page, "Yüzen Araç Çubuğu (Dinamik Ada)", PageMargin, 154);
 
         var barCard = new GroupedCard(new[] { 44, 44, 44 }, verticalSplitX: half)
         {
-            Location = new Point(PageMargin, 250),
+            Location = new Point(PageMargin, 176),
             Size = new Size(CardWidth, 176),
         };
 
@@ -642,19 +590,10 @@ public sealed class SettingsForm : Form
         var barLong = AddCompactToggleCell(barCard, 0, 132, half, "Uzun yakalama (Ctrl+L)", _settings.ShowToolbarLongCapture);
 
         var barRecord = AddCompactToggleCell(barCard, half, 0, half, "Video / GIF kayıt (Ctrl+G)", _settings.ShowToolbarRecord);
-        var barOcr = AddCompactToggleCell(barCard, half, 44, half, "Metin tanıma (Shift+C)", _settings.ShowToolbarOcr);
+        var barOcr = AddCompactToggleCell(barCard, half, 44, half, "Metni çıkart (Shift+C)", _settings.ShowToolbarOcr);
         var barPin = AddCompactToggleCell(barCard, half, 88, half, "Ekrana sabitle (Ctrl+T)", _settings.ShowToolbarPin);
 
-        var barNote = new Label
-        {
-            Text = "Gizlenen araçlara '...' menüsünden erişilir.",
-            Font = Theme.SmallFont,
-            ForeColor = Theme.MutedText,
-            BackColor = Theme.SurfaceCard,
-            UseCompatibleTextRendering = true,
-            AutoSize = true,
-            Location = new Point(half + 18, 146),
-        };
+        var barNote = MakeLabel("Gizlenen araçlara '...' menüsünden erişilir.", Theme.SmallFont, Theme.MutedText, Theme.SurfaceCard, half + 18, 146);
         barCard.Controls.Add(barNote);
 
         page.Controls.Add(drawCard);
@@ -665,33 +604,22 @@ public sealed class SettingsForm : Form
 
     // ----------------------------------------------------------------- Shared Row Builders
 
-    private static void AddSectionCaption(Panel page, string text, int x, int y)
+    private static Label MakeLabel(string text, Font font, Color color, Color backColor, int x, int y)
     {
-        var label = new Label
-        {
-            Text = text,
-            Font = Theme.SectionFont,
-            ForeColor = Theme.SubText,
-            BackColor = Theme.WindowBack,
-            UseCompatibleTextRendering = true,
-            AutoSize = true,
-            Location = new Point(x + 4, y),
-        };
-        page.Controls.Add(label);
+        var label = UiFactory.Label(text);
+        label.Font = font;
+        label.ForeColor = color;
+        label.BackColor = backColor;
+        label.Location = new Point(x, y);
+        return label;
     }
+
+    private static void AddSectionCaption(Panel page, string text, int x, int y)
+        => page.Controls.Add(MakeLabel(text, Theme.SectionFont, Theme.SubText, Theme.WindowBack, x + 4, y));
 
     private static Label AddRowLabels(Panel card, int x, int y, string title, string? subtitle)
     {
-        var titleLbl = new Label
-        {
-            Text = title,
-            Font = Theme.UiFontMedium,
-            ForeColor = Theme.Text,
-            BackColor = Theme.SurfaceCard,
-            UseCompatibleTextRendering = true,
-            AutoSize = true,
-            Location = new Point(x, y),
-        };
+        var titleLbl = MakeLabel(title, Theme.UiFontMedium, Theme.Text, Theme.SurfaceCard, x, y);
         card.Controls.Add(titleLbl);
 
         if (string.IsNullOrEmpty(subtitle))
@@ -699,16 +627,7 @@ public sealed class SettingsForm : Form
             return titleLbl;
         }
 
-        var subLbl = new Label
-        {
-            Text = subtitle,
-            Font = Theme.SmallFont,
-            ForeColor = Theme.MutedText,
-            BackColor = Theme.SurfaceCard,
-            UseCompatibleTextRendering = true,
-            AutoSize = true,
-            Location = new Point(x, y + 18),
-        };
+        var subLbl = MakeLabel(subtitle, Theme.SmallFont, Theme.MutedText, Theme.SurfaceCard, x, y + 18);
         card.Controls.Add(subLbl);
         return subLbl;
     }
@@ -726,16 +645,7 @@ public sealed class SettingsForm : Form
     private static UiFactory.AppleToggleSwitch AddCompactToggleCell(
         Panel card, int colX, int rowTop, int colWidth, string title, bool value)
     {
-        var label = new Label
-        {
-            Text = title,
-            Font = Theme.UiFont,
-            ForeColor = Theme.Text,
-            BackColor = Theme.SurfaceCard,
-            UseCompatibleTextRendering = true,
-            AutoSize = true,
-            Location = new Point(colX + 18, rowTop + 14),
-        };
+        var label = MakeLabel(title, Theme.UiFont, Theme.Text, Theme.SurfaceCard, colX + 18, rowTop + 14);
         card.Controls.Add(label);
 
         var toggle = UiFactory.Toggle(value);
@@ -982,6 +892,81 @@ public sealed class SettingsForm : Form
 
     // ----------------------------------------------------------------- Custom Controls
 
+    private sealed class TrayLifecyclePill : Control
+    {
+        private bool _hoverExit;
+        public event Action? ExitClicked;
+
+        public TrayLifecyclePill()
+        {
+            SetStyle(
+                ControlStyles.AllPaintingInWmPaint |
+                ControlStyles.OptimizedDoubleBuffer |
+                ControlStyles.UserPaint |
+                ControlStyles.ResizeRedraw,
+                true);
+            Size = new Size(156, 30);
+            BackColor = Theme.WindowBack;
+        }
+
+        protected override void OnMouseMove(MouseEventArgs e)
+        {
+            base.OnMouseMove(e);
+            var overExit = e.X >= 84;
+            if (overExit != _hoverExit)
+            {
+                _hoverExit = overExit;
+                Cursor = overExit ? Cursors.Hand : Cursors.Default;
+                Invalidate();
+            }
+        }
+
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            base.OnMouseLeave(e);
+            _hoverExit = false;
+            Cursor = Cursors.Default;
+            Invalidate();
+        }
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            base.OnMouseDown(e);
+            if (e.Button == MouseButtons.Left && e.X >= 84)
+            {
+                ExitClicked?.Invoke();
+            }
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            Theme.Prepare(g);
+            g.Clear(Theme.WindowBack);
+
+            var rect = new RectangleF(0.5f, 0.5f, Width - 1f, Height - 1f);
+            Theme.FillRounded(g, rect, 15f, Color.FromArgb(19, 20, 24));
+            Theme.DrawRounded(g, rect, 15f, Color.FromArgb(26, 255, 255, 255), 1f);
+
+            using var dotBrush = new SolidBrush(Color.FromArgb(48, 209, 88));
+            g.FillEllipse(dotBrush, 13f, (Height - 6f) / 2f, 6f, 6f);
+            Theme.DrawText(g, "Tepside", Theme.SmallFont, new RectangleF(24f, 0f, 56f, Height), Theme.SubText, StringAlignment.Near, StringAlignment.Center);
+
+            using var divPen = new Pen(Color.FromArgb(26, 255, 255, 255), 1f);
+            g.DrawLine(divPen, 83f, 7f, 83f, Height - 8f);
+
+            var exitRect = new RectangleF(85.5f, 2.5f, Width - 88f, Height - 5f);
+            if (_hoverExit)
+            {
+                Theme.FillRounded(g, exitRect, 12.5f, Color.FromArgb(46, 255, 69, 58));
+            }
+
+            var exitColor = _hoverExit ? Color.FromArgb(255, 130, 124) : Theme.SubText;
+            Icons.Draw(g, IconKind.Close, new RectangleF(94f, (Height - 10f) / 2f, 10f, 10f), exitColor, 1.4f);
+            Theme.DrawText(g, "Çıkış", Theme.SmallFont, new RectangleF(108f, 0f, 44f, Height), exitColor, StringAlignment.Near, StringAlignment.Center);
+        }
+    }
+
     private sealed class SidebarTab : Control
     {
         private readonly string _text;
@@ -1190,8 +1175,8 @@ public sealed class SettingsForm : Form
             }
 
             Theme.DrawText(
-                g, "Bölge seçin, pencere algılayın veya anında düzenleyin", Theme.UiFont,
-                new RectangleF(76, 44, 326, 22), Theme.SubText,
+                g, "Bölge seçin, pencere yakalayın veya düzenleyin", Theme.UiFont,
+                new RectangleF(76, 44, 336, 22), Theme.SubText,
                 StringAlignment.Near, StringAlignment.Center);
         }
     }

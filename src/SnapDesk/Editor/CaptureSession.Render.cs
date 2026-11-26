@@ -444,7 +444,7 @@ public sealed partial class CaptureSession
                 CaptureIntent.Pin => "Sabitleme için bölge seçin",
                 CaptureIntent.LongCapture => "Uzun yakalama için bölge seçin",
                 CaptureIntent.Record => "Video/GIF kaydı için bölge seçin",
-                CaptureIntent.Ocr => "Metin tanıma (OCR) için bölge seçin",
+                CaptureIntent.Ocr => "Metni çıkartmak için bölge seçin",
                 _ => string.Empty,
             };
             using var modeBrush = new SolidBrush(Color.FromArgb(120, 180, 255));

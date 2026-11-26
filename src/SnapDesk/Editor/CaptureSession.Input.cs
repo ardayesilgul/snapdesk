@@ -1441,7 +1441,7 @@ public sealed partial class CaptureSession
         menu.Items.Add(MenuItem("Kopyala (Ctrl+C)", () => CopyAndClose()));
         menu.Items.Add(MenuItem("Kaydet (Ctrl+S)", Save));
         menu.Items.Add(MenuItem("Ekrana sabitle (Ctrl+T)", Pin));
-        menu.Items.Add(MenuItem("Metni tanı (Shift+C)", RunOcr));
+        menu.Items.Add(MenuItem("Metni çıkart (Shift+C)", RunOcr));
         var longItem = MenuItem("Uzun yakalama (Ctrl+L)", StartLongCapture);
         longItem.Enabled = HasSelection;
         menu.Items.Add(longItem);

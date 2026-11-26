@@ -5,14 +5,14 @@ using System.Runtime.InteropServices;
 namespace SnapDesk.UI;
 
 /// <summary>
-/// Uygulama görsel teması, renk katmanları ve gömülü Inter tipografi hiyerarşisi (OLED Zinc + Apple).
+/// Uygulama görsel teması, renk katmanları ve gömülü Geist tipografi hiyerarşisi (OLED Zinc + Apple).
 /// </summary>
 public static class Theme
 {
     private static readonly PrivateFontCollection EmbeddedFonts = LoadEmbeddedFonts();
-    private static readonly FontFamily? InterRegularFamily = FindFamily("Inter");
-    private static readonly FontFamily? InterMediumFamily = FindFamily("Inter Medium");
-    private static readonly FontFamily? InterSemiBoldFamily = FindFamily("Inter SemiBold");
+    private static readonly FontFamily? GeistRegularFamily = FindFamily("Geist");
+    private static readonly FontFamily? GeistMediumFamily = FindFamily("Geist Medium");
+    private static readonly FontFamily? GeistSemiBoldFamily = FindFamily("Geist SemiBold");
     // Katmanlı OLED Zinc yüzey paleti (0 = Tuval, 1 = Sidebar, 2 = Kart, 3 = Girdi, 4 = Hover)
     public static readonly Color WindowBack = Color.FromArgb(8, 9, 10);
     public static readonly Color ToolbarBack = Color.FromArgb(13, 14, 17);
@@ -59,46 +59,46 @@ public static class Theme
 
     public static readonly Color[] Palette = { Red, Yellow, Green, Blue, Black, White };
 
-    public static Font Ui(float size = 9f, FontStyle style = FontStyle.Regular)
+    public static Font Ui(float size = 9.2f, FontStyle style = FontStyle.Regular)
     {
         if (style == FontStyle.Bold)
         {
-            if (InterSemiBoldFamily is not null)
+            if (GeistSemiBoldFamily is not null)
             {
-                return new Font(InterSemiBoldFamily, size, FontStyle.Regular, GraphicsUnit.Point);
+                return new Font(GeistSemiBoldFamily, size, FontStyle.Regular, GraphicsUnit.Point);
             }
-            if (InterRegularFamily is not null)
+            if (GeistRegularFamily is not null)
             {
-                return new Font(InterRegularFamily, size, FontStyle.Bold, GraphicsUnit.Point);
+                return new Font(GeistRegularFamily, size, FontStyle.Bold, GraphicsUnit.Point);
             }
-            return new Font("Segoe UI", size, FontStyle.Bold, GraphicsUnit.Point);
+            return new Font("Segoe UI Variable Display Semib", size, FontStyle.Regular, GraphicsUnit.Point);
         }
 
-        if (InterRegularFamily is not null)
+        if (GeistRegularFamily is not null)
         {
-            return new Font(InterRegularFamily, size, style, GraphicsUnit.Point);
+            return new Font(GeistRegularFamily, size, style, GraphicsUnit.Point);
         }
 
-        return new Font("Segoe UI", size, style, GraphicsUnit.Point);
+        return new Font("Segoe UI Variable Text", size, style, GraphicsUnit.Point);
     }
 
-    public static Font Medium(float size = 9f)
-        => InterMediumFamily is not null
-            ? new Font(InterMediumFamily, size, FontStyle.Regular, GraphicsUnit.Point)
+    public static Font Medium(float size = 9.2f)
+        => GeistMediumFamily is not null
+            ? new Font(GeistMediumFamily, size, FontStyle.Regular, GraphicsUnit.Point)
             : Ui(size);
 
-    public static readonly Font TitleFont = Ui(13.5f, FontStyle.Bold);
+    public static readonly Font TitleFont = Ui(14f, FontStyle.Bold);
     public static readonly Font SectionFont = Ui(9.5f, FontStyle.Bold);
-    public static readonly Font UiFont = Ui(9f);
-    public static readonly Font UiFontMedium = Medium(9f);
-    public static readonly Font UiFontBold = Ui(9f, FontStyle.Bold);
-    public static readonly Font SmallFont = Ui(8.2f);
+    public static readonly Font UiFont = Ui(9.2f);
+    public static readonly Font UiFontMedium = Medium(9.2f);
+    public static readonly Font UiFontBold = Ui(9.2f, FontStyle.Bold);
+    public static readonly Font SmallFont = Ui(8.4f);
     public static readonly Font MonoFont = new("Consolas", 10f, FontStyle.Bold, GraphicsUnit.Point);
 
     public static void Prepare(Graphics g)
     {
         g.SmoothingMode = SmoothingMode.AntiAlias;
-        g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
+        g.TextRenderingHint = TextRenderingHint.AntiAlias;
         g.PixelOffsetMode = PixelOffsetMode.HighQuality;
     }
 
@@ -117,7 +117,7 @@ public static class Theme
             return;
         }
 
-        g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
+        g.TextRenderingHint = TextRenderingHint.AntiAlias;
         using var format = new StringFormat(StringFormatFlags.NoWrap)
         {
             Alignment = horizontal,

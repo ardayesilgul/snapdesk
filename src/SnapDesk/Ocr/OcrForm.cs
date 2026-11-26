@@ -40,14 +40,14 @@ public sealed class OcrForm : Form
 
         UiFactory.StyleForm(this);
         UiFactory.AttachSmoothEntrance(this);
-        Text = "SnapDesk — Metin Tanıma";
+        Text = "SnapDesk — Metni Çıkart";
         StartPosition = FormStartPosition.CenterScreen;
         ClientSize = new Size(760, 640);
         MinimumSize = new Size(680, 480);
         ShowInTaskbar = true;
         KeyPreview = true;
 
-        var title = UiFactory.Label("Metin Tanıma");
+        var title = UiFactory.Label("Metni Çıkart");
         title.Font = Theme.TitleFont;
         title.Location = new Point(22, 18);
 

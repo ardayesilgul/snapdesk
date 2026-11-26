@@ -24,7 +24,7 @@
 - **Metin ve Numaralandırma:** Yazı tipi, kalınlık, boyut ve kontrast dış kontur ayarlı doğrudan metin yerleştirme. Rehberler ve adımlar için sıralı tıklanabilir numara rozetleri (1, 2, 3...).
 - **Gizleme (Mozaik ve Bulanıklık):** Ayarlanabilir blok boyutu ve yoğunluğuyla pikselli mozaik veya yumuşak Gauss bulanıklığı.
 - **Ekrana Sabitleme (Pin):** Yakalanan görseli masaüstünde her zaman en üstte kalacak şekilde sabitleme. Fare tekerleğiyle yakınlaştırma/uzaklaştırma (zoom), sürükleme, tıklama geçirgenliği (click-through) ve sağ tık menüsünden doğrudan panoya kopyalama veya OCR çalıştırma.
-- **Yerel Metin Tanıma (OCR):** Windows yerel OCR altyapısıyla tamamen çevrimdışı metin tanıma. Satır düzenini ve boşlukları korur, doğrudan panoya kopyalanabilir veya `.txt` olarak kaydedilebilir.
+- **Metni Çıkart (Yerel OCR):** Windows yerel OCR altyapısıyla tamamen çevrimdışı metin çıkarma. Satır düzenini ve boşlukları korur, doğrudan panoya kopyalanabilir veya `.txt` olarak kaydedilebilir.
 - **Uzun (Kaydırmalı) Yakalama:** Tekerlek kaydırmalı örtüşme eşleme ile uzun sayfaları ve belgeleri dikeyde birleştirme.
 - **Bölge Video Kaydı:** FFmpeg altyapısıyla duraklat/devam et destekli bölge kaydı, MP4 ve GIF olarak dışa aktarma.
 - **Sistem Tepsisi ve Tek Tıkla Yakalama:** Windows sağ alttaki gizli simgeler (`^`) tepsisinde hazır bekler. Simgeye **sol tıklayarak** kısayol gerekmeden doğrudan ekran görüntüsü alabilir, **sağ tıklayarak** SnapDesk uygulama arayüzünü ve ayarları açabilirsiniz.

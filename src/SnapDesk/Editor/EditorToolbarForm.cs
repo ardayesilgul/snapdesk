@@ -288,7 +288,7 @@ public sealed class EditorToolbarForm : Form
 
             if (settings.ShowToolbarOcr)
             {
-                _hits.Add(Button("ocr", IconKind.Ocr, "Metni tanı (Shift+C)", x, y, btn, false));
+                _hits.Add(Button("ocr", IconKind.Ocr, "Metni çıkart (Shift+C)", x, y, btn, false));
                 x += btn + gap;
             }
 
@@ -1639,7 +1639,7 @@ public sealed class EditorToolbarForm : Form
         menu.Items.Add(MenuItem("Görüntüyü kaydet (Ctrl+S)", _session.Save));
         menu.Items.Add(MenuItem("Seçime kırp", _session.CropToSelection));
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add(MenuItem("Metni tanı (OCR) (Shift+C)", _session.RunOcr));
+        menu.Items.Add(MenuItem("Metni çıkart (Shift+C)", _session.RunOcr));
         menu.Items.Add(MenuItem("Ekrana sabitle (Pin) (Ctrl+T)", _session.Pin));
         menu.Items.Add(MenuItem("Uzun yakalama (Ctrl+L)", _session.StartLongCapture));
         menu.Items.Add(MenuItem("Video / GIF kaydet (Ctrl+G)", _session.StartRecording));
